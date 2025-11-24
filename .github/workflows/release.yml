@@ -1,0 +1,49 @@
+# This workflow is triggered when a new tag is pushed to main.
+# It can also be run manually to re-publish a release in case it failed for some reason.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# NOTE: we pin specific versions below so the publish is reproducible.
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5.5.0
+        with:
+          go-version: 1.23.0
+
+      - name: Install goreleaser
+        run: |
+          wget -q https://github.com/goreleaser/goreleaser/releases/download/v2.12.7/goreleaser_Linux_x86_64.tar.gz
+          tar -xzf goreleaser_Linux_x86_64.tar.gz goreleaser
+          sudo mv goreleaser /usr/local/bin/
+          goreleaser --version
+
+      - name: Publish release
+        run: make release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # these envars are needed because `make release` runs CI as a final sanity check
+          CGO_ENABLED: 0
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRAINTRUST_API_KEY: ${{ secrets.BRAINTRUST_API_KEY }}
