@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Check if working directory is clean
+if ! git diff-index --quiet HEAD --; then
+    echo "Error: Working directory is not clean." >&2
+    git status --porcelain
+    exit 1
+fi
+
+# Check if we're on a tagged commit
+VERSION=$(git describe --tags --exact-match 2>/dev/null || echo "")
+if [ -z "$VERSION" ]; then
+    echo "Error: Not on a tagged commit. Please create and push a tag first." >&2
+    exit 1
+fi
+
+echo "Releasing version $VERSION..."
+
+# Run goreleaser
+goreleaser release --clean
+
+# Index package with Go proxy
+echo ""
+echo "Indexing package with Go proxy..."
+echo "Indexing version: $VERSION"
+curl -f "https://proxy.golang.org/github.com/braintrustdata/braintrust-sdk-go/@v/$VERSION.info" || true
+echo ""
+echo "Package indexed successfully!"
+
+# Get repository URL
+REPO_URL=$(git config --get remote.origin.url | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
+
+# Show completion information
+echo "RELEASE COMPLETE: $VERSION"
+echo ""
+echo "Note: Docs should be updated within the next hour. Request manually at the URL above"
+echo "if they don't show up"
+echo "- Release: $REPO_URL/releases/tag/$VERSION"
+echo "- Docs:    https://pkg.go.dev/github.com/braintrustdata/braintrust-sdk-go@$VERSION/braintrust"
+echo "- Index:   https://proxy.golang.org/github.com/braintrustdata/braintrust-sdk-go/@v/$VERSION.info"
