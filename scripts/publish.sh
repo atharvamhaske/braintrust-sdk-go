@@ -35,8 +35,8 @@ REPO_URL=$(git config --get remote.origin.url | sed 's/git@github.com:/https:\/\
 # Show completion information
 echo "RELEASE COMPLETE: $VERSION"
 echo ""
-echo "Note: Docs should be updated within the next hour. Request manually at the URL above"
+echo "Note: Docs should be updated within the next hour. Request manually at the URL below"
 echo "if they don't show up"
 echo "- Release: $REPO_URL/releases/tag/$VERSION"
-echo "- Docs:    https://pkg.go.dev/github.com/braintrustdata/braintrust-sdk-go@$VERSION/braintrust"
+echo "- Docs:    https://pkg.go.dev/github.com/braintrustdata/braintrust-sdk-go@$VERSION"
 echo "- Index:   https://proxy.golang.org/github.com/braintrustdata/braintrust-sdk-go/@v/$VERSION.info"
