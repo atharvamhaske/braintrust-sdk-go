@@ -24,6 +24,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
       - name: Set up Go
@@ -31,8 +32,14 @@ jobs:
         with:
           go-version: 1.23.0
 
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1.6
+
       - name: Install goreleaser
         run: |
+          cd /tmp
           wget -q https://github.com/goreleaser/goreleaser/releases/download/v2.12.7/goreleaser_Linux_x86_64.tar.gz
           tar -xzf goreleaser_Linux_x86_64.tar.gz goreleaser
           sudo mv goreleaser /usr/local/bin/
