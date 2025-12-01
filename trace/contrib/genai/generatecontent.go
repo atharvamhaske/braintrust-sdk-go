@@ -36,7 +36,7 @@ func newGenerateContentTracer(cfg *config, model string) *generateContentTracer 
 func (gt *generateContentTracer) StartSpan(ctx context.Context, t time.Time, request io.Reader) (context.Context, trace.Span, error) {
 	ctx, span := gt.cfg.tracer().Start(
 		ctx,
-		"genai.models.generateContent",
+		"generate_content",
 		trace.WithTimestamp(t),
 	)
 

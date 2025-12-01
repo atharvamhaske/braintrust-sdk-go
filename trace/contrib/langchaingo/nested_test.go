@@ -106,9 +106,11 @@ func TestNestedCalls(t *testing.T) {
 
 	if chainSpan == nil {
 		t.Fatal("Missing chain span")
+		return // linter complains if we don't return
 	}
 	if llmSpan == nil {
 		t.Fatal("Missing LLM span")
+		return // linter complains if we don't return
 	}
 
 	// Verify parent-child relationships using the Stub's Parent field

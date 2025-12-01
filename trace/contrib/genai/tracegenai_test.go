@@ -75,7 +75,7 @@ func TestBasicGenerateContent(t *testing.T) {
 	// Verify span was created
 	ts := exporter.FlushOne()
 	ts.AssertInTimeRange(timeRange)
-	ts.AssertNameIs("genai.models.generateContent")
+	ts.AssertNameIs("generate_content")
 	assert.Equal(codes.Unset, ts.Status().Code)
 
 	// Verify metadata
