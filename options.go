@@ -88,6 +88,15 @@ func WithFilterAISpans(enabled bool) Option {
 	}
 }
 
+// EnableBuiltinAdkTraces can be used to enable exporting spans from Google
+// ADK's built-in telemetry (gcp.vertex.agent), which are not exported to
+// Braintrust by default.
+func EnableBuiltinAdkTraces() Option {
+	return func(c *config.Config) {
+		c.EnableBuiltinAdkTraces = true
+	}
+}
+
 // WithSpanFilterFuncs adds custom span filter functions
 // Filters are evaluated in order. Return >0 to keep, <0 to drop, 0 to continue
 func WithSpanFilterFuncs(filterFuncs ...config.SpanFilterFunc) Option {

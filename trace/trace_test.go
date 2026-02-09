@@ -353,6 +353,95 @@ func TestWithFilterAISpans_Option(t *testing.T) {
 	assert.NotContains(spanNames, "http.request")
 }
 
+func TestEnableBuiltinAdkTraces_False(t *testing.T) {
+	assert := assert.New(t)
+
+	tp := sdktrace.NewTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+
+	session := newTestSession()
+	cfg := Config{
+		DefaultProjectID:       "adk-filter-test",
+		EnableBuiltinAdkTraces: false, // default: drop gcp.vertex.agent spans
+		Exporter:               exporter,
+		Logger:                 logger.Discard(),
+	}
+
+	err := AddSpanProcessor(tp, session, cfg)
+	assert.NoError(err)
+
+	// Create a root span first to serve as parent
+	btTracer := tp.Tracer("braintrust")
+	ctx, rootSpan := btTracer.Start(context.Background(), "agent_run")
+
+	// Span from Google ADK's tracer (gcp.vertex.agent) as a child - should be dropped
+	adkTracer := tp.Tracer("gcp.vertex.agent")
+	_, adkSpan := adkTracer.Start(ctx, "call_llm")
+	adkSpan.End()
+
+	// End root span
+	rootSpan.End()
+
+	_ = tp.ForceFlush(context.Background())
+	spans := exporter.GetSpans()
+
+	assert.Len(spans, 1)
+	assert.Equal("agent_run", spans[0].Name)
+	assert.Equal("braintrust", spans[0].InstrumentationScope.Name)
+
+	// Root spans are also filtered
+	_, adkSpan = adkTracer.Start(context.Background(), "execute_tool (merged)", trace.WithAttributes(
+		attribute.String("gen_ai.operation.name", "execute_tool"),
+		attribute.String("gen_ai.tool.name", "(merged tools)"),
+	))
+	adkSpan.End()
+
+	// No new spans
+	_ = tp.ForceFlush(context.Background())
+	spans = exporter.GetSpans()
+
+	assert.Len(spans, 1)
+	assert.Equal("agent_run", spans[0].Name)
+	assert.Equal("braintrust", spans[0].InstrumentationScope.Name)
+}
+
+func TestEnableBuiltinAdkTraces_True(t *testing.T) {
+	assert := assert.New(t)
+
+	tp := sdktrace.NewTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+
+	session := newTestSession()
+	cfg := Config{
+		DefaultProjectID:       "adk-allow-test",
+		EnableBuiltinAdkTraces: true,
+		Exporter:               exporter,
+		Logger:                 logger.Discard(),
+	}
+
+	err := AddSpanProcessor(tp, session, cfg)
+	assert.NoError(err)
+
+	adkTracer := tp.Tracer("gcp.vertex.agent")
+	_, adkSpan := adkTracer.Start(context.Background(), "call_llm")
+	adkSpan.End()
+
+	btTracer := tp.Tracer("braintrust")
+	_, btSpan := btTracer.Start(context.Background(), "agent_run")
+	btSpan.End()
+
+	_ = tp.ForceFlush(context.Background())
+	spans := exporter.GetSpans()
+
+	assert.Len(spans, 2)
+	scopeNames := make([]string, len(spans))
+	for i, s := range spans {
+		scopeNames[i] = s.InstrumentationScope.Name
+	}
+	assert.Contains(scopeNames, "gcp.vertex.agent")
+	assert.Contains(scopeNames, "braintrust")
+}
+
 func TestWithFilterAISpans_CombinedWithCustomFilters(t *testing.T) {
 	assert := assert.New(t)
 
