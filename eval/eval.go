@@ -54,9 +54,8 @@ var (
 
 var (
 	// braintrust "span_attributes" for each type of eval span.
-	evalSpanAttrs  = map[string]any{"type": "eval"}
-	taskSpanAttrs  = map[string]any{"type": "task"}
-	scoreSpanAttrs = map[string]any{"type": "score"}
+	evalSpanAttrs = map[string]any{"type": "eval"}
+	taskSpanAttrs = map[string]any{"type": "task"}
 )
 
 // Opts defines the options for running an evaluation.
@@ -413,41 +412,18 @@ func (e *eval[I, R]) runNextCase(ctx context.Context, nextCase nextCase[I, R]) e
 }
 
 // runCase orchestrates task + scorers for one case.
-// Copied from old package.
 func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I, R]) error {
-	if c.Tags != nil {
-		span.SetAttributes(attribute.StringSlice("braintrust.tags", c.Tags))
-	}
-
-	taskResult, err := e.runTask(ctx, span, c)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-	output := taskResult.Output
-
-	_, err = e.runScorers(ctx, taskResult)
-	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	meta := map[string]any{
+	// Set all non-output attributes upfront so they're captured even if the task fails.
+	upfront := map[string]any{
 		"braintrust.span_attributes": evalSpanAttrs,
 		"braintrust.input_json":      c.Input,
-		"braintrust.output_json":     output,
 		"braintrust.expected":        c.Expected,
 	}
-
-	// Add case metadata if present
 	if c.Metadata != nil {
-		meta["braintrust.metadata"] = c.Metadata
+		upfront["braintrust.metadata"] = c.Metadata
 	}
-
-	// Add origin if this case came from a dataset
-	// Origin links the eval result back to the source dataset row
 	if c.ID != "" && c.XactID != "" {
-		meta["braintrust.origin"] = map[string]any{
+		upfront["braintrust.origin"] = map[string]any{
 			"object_type": "dataset",
 			"object_id":   e.datasetID,
 			"id":          c.ID,
@@ -455,8 +431,31 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 			"_xact_id":    c.XactID,
 		}
 	}
+	if err := setJSONAttrs(span, upfront); err != nil {
+		return err
+	}
+	if c.Tags != nil {
+		span.SetAttributes(attribute.StringSlice("braintrust.tags", c.Tags))
+	}
 
-	return setJSONAttrs(span, meta)
+	taskResult, err := e.runTask(ctx, span, c)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		_ = setJSONAttr(span, "braintrust.output_json", nil)
+		return err
+	}
+
+	if err := setJSONAttr(span, "braintrust.output_json", taskResult.Output); err != nil {
+		return err
+	}
+
+	_, err = e.runScorers(ctx, taskResult)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	return nil
 }
 
 // runTask executes the task function and creates a task span.
@@ -490,9 +489,9 @@ func (e *eval[I, R]) runTask(ctx context.Context, evalSpan oteltrace.Span, c Cas
 	// Call task with new signature
 	taskOutput, err := e.task(ctx, c.Input, hooks)
 	if err != nil {
-		// if the task fails, don't worry about the encode errors....
 		taskErr := fmt.Errorf("%w: %w", errTaskRun, err)
 		recordSpanError(taskSpan, taskErr)
+		_ = setJSONAttr(taskSpan, "braintrust.output_json", nil)
 		return TaskResult[I, R]{}, taskErr
 	}
 
@@ -515,57 +514,72 @@ func (e *eval[I, R]) runTask(ctx context.Context, evalSpan oteltrace.Span, c Cas
 	return taskResult, errors.Join(encodeErrs...)
 }
 
-// runScorers executes all scorers and creates a score span.
+// runScorers runs each scorer in its own span and returns all scores.
 func (e *eval[I, R]) runScorers(ctx context.Context, taskResult TaskResult[I, R]) ([]Score, error) {
-	ctx, span := e.tracer.Start(ctx, "score", e.startSpanOpt)
+	var allScores []Score
+	var errs []error
+
+	for _, scorer := range e.scorers {
+		scores, err := e.runScorer(ctx, scorer, taskResult)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		allScores = append(allScores, scores...)
+	}
+
+	return allScores, errors.Join(errs...)
+}
+
+// runScorer executes a single scorer in its own span named after the scorer.
+func (e *eval[I, R]) runScorer(ctx context.Context, scorer Scorer[I, R], taskResult TaskResult[I, R]) ([]Score, error) {
+	_, span := e.tracer.Start(ctx, scorer.Name(), e.startSpanOpt)
 	defer span.End()
 
-	if err := setJSONAttr(span, "braintrust.span_attributes", scoreSpanAttrs); err != nil {
+	spanAttrs := map[string]any{
+		"type":    "score",
+		"name":    scorer.Name(),
+		"purpose": "scorer",
+	}
+	if err := setJSONAttr(span, "braintrust.span_attributes", spanAttrs); err != nil {
 		return nil, err
 	}
 
-	var scores []Score
+	// Log the task result (input/expected/output) as the scorer's input.
+	scorerInput := map[string]any{
+		"input":    taskResult.Input,
+		"expected": taskResult.Expected,
+		"output":   taskResult.Output,
+	}
+	if err := setJSONAttr(span, "braintrust.input_json", scorerInput); err != nil {
+		return nil, err
+	}
 
-	var errs []error
-	for _, scorer := range e.scorers {
-		curScores, err := scorer.Run(ctx, taskResult)
-		if err != nil {
-			werr := fmt.Errorf("%w: scorer %q failed: %w", errScorer, scorer.Name(), err)
-			recordSpanError(span, werr)
-			errs = append(errs, werr)
-			continue
-		}
-		for _, score := range curScores {
-			if score.Name == "" {
-				score.Name = scorer.Name()
-			}
-			scores = append(scores, score)
+	scores, err := scorer.Run(ctx, taskResult)
+	if err != nil {
+		werr := fmt.Errorf("%w: scorer %q failed: %w", errScorer, scorer.Name(), err)
+		recordSpanError(span, werr)
+		return nil, werr
+	}
+
+	// Normalize score names.
+	for i := range scores {
+		if scores[i].Name == "" {
+			scores[i].Name = scorer.Name()
 		}
 	}
 
-	// Build scores map (name -> score value)
+	// Build scores map (name -> value).
 	valsByName := make(map[string]float64, len(scores))
 	for _, score := range scores {
 		valsByName[score.Name] = score.Score
 	}
-
 	if err := setJSONAttr(span, "braintrust.scores", valsByName); err != nil {
 		return nil, err
 	}
 
-	// Build metadata and output following Python/TypeScript conventions
-	// Always build nested structure, then flatten if single score
-	metadata := make(map[string]any, len(scores))
-	output := make(map[string]any, len(scores))
-
-	for _, score := range scores {
-		if score.Metadata != nil {
-			metadata[score.Name] = score.Metadata
-		}
-		output[score.Name] = map[string]any{"score": score.Score}
-	}
-
-	// For single score: flatten metadata and output to top level
+	// For a single score: flatten metadata/output to top level.
+	// For multiple scores returned by one scorer: nest by name.
 	if len(scores) == 1 {
 		score := scores[0]
 		if score.Metadata != nil {
@@ -577,7 +591,14 @@ func (e *eval[I, R]) runScorers(ctx context.Context, taskResult TaskResult[I, R]
 			return nil, err
 		}
 	} else if len(scores) > 1 {
-		// Multiple scores: use nested structure
+		metadata := make(map[string]any, len(scores))
+		output := make(map[string]any, len(scores))
+		for _, score := range scores {
+			if score.Metadata != nil {
+				metadata[score.Name] = score.Metadata
+			}
+			output[score.Name] = map[string]any{"score": score.Score}
+		}
 		if len(metadata) > 0 {
 			if err := setJSONAttr(span, "braintrust.metadata", metadata); err != nil {
 				return nil, err
@@ -588,8 +609,7 @@ func (e *eval[I, R]) runScorers(ctx context.Context, taskResult TaskResult[I, R]
 		}
 	}
 
-	err := errors.Join(errs...) // will be nil if there are no errors
-	return scores, err
+	return scores, nil
 }
 
 // permalink generates a URL to view the eval in Braintrust UI.

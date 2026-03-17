@@ -136,12 +136,12 @@ func TestNewEval_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify all spans were created with correct structure
-	// Spans are in completion order: task, score, eval for each case
+	// Each case produces: task + scorer + eval = 3 spans. 2 cases = 6 spans.
+	// Completion order per case: task, scorer, eval.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 6) // 2 cases * (task + score + eval) = 6 spans
+	require.Len(t, spans, 6)
 
-	// First case spans (in completion order: task, score, eval)
+	// First case spans (completion order: task, scorer, eval)
 	spans[0].AssertEqual(oteltest.TestSpan{
 		Name: "task",
 		Attrs: map[string]any{
@@ -155,16 +155,27 @@ func TestNewEval_Success(t *testing.T) {
 		},
 	})
 
+	// Scorer span is named after the scorer, with purpose/name in span_attributes,
+	// and the task result logged as input.
 	spans[1].AssertEqual(oteltest.TestSpan{
-		Name: "score",
+		Name: "accuracy",
 		Attrs: map[string]any{
 			"braintrust.parent": "experiment_id:exp-12345678",
 		},
 		JSONAttrs: map[string]any{
-			"braintrust.span_attributes": map[string]any{"type": "score"},
-			"braintrust.scores":          map[string]any{"accuracy": 0.95},
-			"braintrust.metadata":        map[string]any{"note": "good"},
-			"braintrust.output":          map[string]any{"score": 0.95},
+			"braintrust.span_attributes": map[string]any{
+				"type":    "score",
+				"name":    "accuracy",
+				"purpose": "scorer",
+			},
+			"braintrust.input_json": map[string]any{
+				"input":    map[string]any{"value": "test1"},
+				"expected": map[string]any{"result": "expected1"},
+				"output":   map[string]any{"result": "output-test1"},
+			},
+			"braintrust.scores":   map[string]any{"accuracy": 0.95},
+			"braintrust.metadata": map[string]any{"note": "good"},
+			"braintrust.output":   map[string]any{"score": 0.95},
 		},
 	})
 
@@ -198,15 +209,24 @@ func TestNewEval_Success(t *testing.T) {
 	})
 
 	spans[4].AssertEqual(oteltest.TestSpan{
-		Name: "score",
+		Name: "accuracy",
 		Attrs: map[string]any{
 			"braintrust.parent": "experiment_id:exp-12345678",
 		},
 		JSONAttrs: map[string]any{
-			"braintrust.span_attributes": map[string]any{"type": "score"},
-			"braintrust.scores":          map[string]any{"accuracy": 0.95},
-			"braintrust.metadata":        map[string]any{"note": "good"},
-			"braintrust.output":          map[string]any{"score": 0.95},
+			"braintrust.span_attributes": map[string]any{
+				"type":    "score",
+				"name":    "accuracy",
+				"purpose": "scorer",
+			},
+			"braintrust.input_json": map[string]any{
+				"input":    map[string]any{"value": "test2"},
+				"expected": map[string]any{"result": "expected2"},
+				"output":   map[string]any{"result": "output-test2"},
+			},
+			"braintrust.scores":   map[string]any{"accuracy": 0.95},
+			"braintrust.metadata": map[string]any{"note": "good"},
+			"braintrust.output":   map[string]any{"score": 0.95},
 		},
 	})
 
@@ -285,30 +305,34 @@ func TestEval_Run_TaskError(t *testing.T) {
 	assert.Contains(t, err.Error(), "task failed")
 	assert.NotNil(t, result)
 
-	// Verify spans (in completion order: task, score, eval per case)
-	// Score span is only created when task succeeds
+	// No scorers: each case produces task + eval = 2 spans.
+	// 3 cases * 2 spans = 6 spans total.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 8) // First: 3 spans, Second: 2 spans (no score), Third: 3 spans
+	require.Len(t, spans, 6)
 
-	// First case succeeds (task, score, eval)
+	// First case succeeds (task, eval)
 	spans[0].AssertNameIs("task")
-	spans[1].AssertNameIs("score")
-	spans[2].AssertNameIs("eval")
+	spans[1].AssertNameIs("eval")
 
-	// Second case fails (task with error, then eval with error - NO score span)
-	spans[3].AssertNameIs("task")
+	// Second case fails: task has error, eval has error with attrs set upfront and null output_json.
+	spans[2].AssertNameIs("task")
+	assert.Equal(t, codes.Error, spans[2].Status().Code)
+	taskEvents := spans[2].Events()
+	require.Len(t, taskEvents, 1)
+	assert.Equal(t, "exception", taskEvents[0].Name)
+
+	spans[3].AssertNameIs("eval")
 	assert.Equal(t, codes.Error, spans[3].Status().Code)
-	events := spans[3].Events()
-	require.Len(t, events, 1)
-	assert.Equal(t, "exception", events[0].Name)
+	// Eval span has input/expected set upfront even on task failure.
+	spans[3].AssertJSONAttrEquals("braintrust.input_json", map[string]any{"value": "error"})
+	spans[3].AssertJSONAttrEquals("braintrust.expected", map[string]any{"result": ""})
+	spans[3].AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{"type": "eval"})
+	// output_json is set to null on task failure.
+	spans[3].AssertJSONAttrEquals("braintrust.output_json", nil)
 
-	spans[4].AssertNameIs("eval")
-	assert.Equal(t, codes.Error, spans[4].Status().Code)
-
-	// Third case succeeds (task, score, eval)
-	spans[5].AssertNameIs("task")
-	spans[6].AssertNameIs("score")
-	spans[7].AssertNameIs("eval")
+	// Third case succeeds (task, eval)
+	spans[4].AssertNameIs("task")
+	spans[5].AssertNameIs("eval")
 }
 
 func TestEval_Run_ScorerError(t *testing.T) {
@@ -323,7 +347,7 @@ func TestEval_Run_ScorerError(t *testing.T) {
 		return testOutput{Result: "ok"}, nil
 	})
 
-	// Scorers: one succeeds, one fails
+	// Scorers: one succeeds, one fails, one succeeds
 	scorerErr := errors.New("scorer failed")
 	scorers := []Scorer[testInput, testOutput]{
 		&simpleScorer{name: "good-scorer", score: 0.8},
@@ -341,37 +365,43 @@ func TestEval_Run_ScorerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "scorer failed")
 	assert.NotNil(t, result)
 
-	// Verify spans (in completion order: task, score, eval per case)
+	// Each case: task + good-scorer + bad-scorer + another-good-scorer + eval = 5 spans.
+	// 2 cases * 5 spans = 10 spans total.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 6) // 2 cases * (task + score + eval) = 6 spans
+	require.Len(t, spans, 10)
 
-	// First case (task succeeds, scorer partially fails, eval fails)
+	// First case
 	spans[0].AssertNameIs("task")
 
-	// Score span should have error status and only successful scores recorded
-	spans[1].AssertNameIs("score")
-	assert.Equal(t, codes.Error, spans[1].Status().Code)
-	spans[1].AssertJSONAttrEquals("braintrust.scores", map[string]any{
-		"good-scorer":         0.8,
-		"another-good-scorer": 0.9,
+	spans[1].AssertNameIs("good-scorer")
+	spans[1].AssertJSONAttrEquals("braintrust.scores", map[string]any{"good-scorer": 0.8})
+	spans[1].AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{
+		"type": "score", "name": "good-scorer", "purpose": "scorer",
 	})
-	spans[1].AssertJSONAttrEquals("braintrust.output", map[string]any{
-		"good-scorer":         map[string]any{"score": 0.8},
-		"another-good-scorer": map[string]any{"score": 0.9},
-	})
-	events := spans[1].Events()
-	require.Len(t, events, 1)
-	assert.Equal(t, "exception", events[0].Name)
 
-	spans[2].AssertNameIs("eval")
+	spans[2].AssertNameIs("bad-scorer")
 	assert.Equal(t, codes.Error, spans[2].Status().Code)
+	spans[2].AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{
+		"type": "score", "name": "bad-scorer", "purpose": "scorer",
+	})
+	badScorerEvents := spans[2].Events()
+	require.Len(t, badScorerEvents, 1)
+	assert.Equal(t, "exception", badScorerEvents[0].Name)
+
+	spans[3].AssertNameIs("another-good-scorer")
+	spans[3].AssertJSONAttrEquals("braintrust.scores", map[string]any{"another-good-scorer": 0.9})
+
+	spans[4].AssertNameIs("eval")
+	assert.Equal(t, codes.Error, spans[4].Status().Code)
 
 	// Second case (same pattern)
-	spans[3].AssertNameIs("task")
-	spans[4].AssertNameIs("score")
-	assert.Equal(t, codes.Error, spans[4].Status().Code)
-	spans[5].AssertNameIs("eval")
-	assert.Equal(t, codes.Error, spans[5].Status().Code)
+	spans[5].AssertNameIs("task")
+	spans[6].AssertNameIs("good-scorer")
+	spans[7].AssertNameIs("bad-scorer")
+	assert.Equal(t, codes.Error, spans[7].Status().Code)
+	spans[8].AssertNameIs("another-good-scorer")
+	spans[9].AssertNameIs("eval")
+	assert.Equal(t, codes.Error, spans[9].Status().Code)
 }
 
 func TestEval_Run_PrintsSummary(t *testing.T) {
@@ -484,12 +514,11 @@ func TestTaskFunc_ReceivesTaskHooks(t *testing.T) {
 	assert.True(t, capturedTaskSpan, "TaskSpan should be set")
 	assert.True(t, capturedEvalSpan, "EvalSpan should be set")
 
-	// Verify consistent span structure (task + score + eval)
+	// No scorers: task + eval = 2 spans.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 3) // task + score + eval
+	require.Len(t, spans, 2)
 	spans[0].AssertNameIs("task")
-	spans[1].AssertNameIs("score")
-	spans[2].AssertNameIs("eval")
+	spans[1].AssertNameIs("eval")
 }
 
 func TestTaskFunc_ModifyTaskSpan(t *testing.T) {
@@ -518,11 +547,10 @@ func TestTaskFunc_ModifyTaskSpan(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify the custom attributes appear on the task span
+	// No scorers: task + eval = 2 spans.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 3) // task + score + eval
+	require.Len(t, spans, 2)
 
-	// Find the task span
 	taskSpan := spans[0]
 	taskSpan.AssertNameIs("task")
 	taskSpan.AssertAttrEquals("custom.task.attribute", "task-value")
@@ -555,12 +583,11 @@ func TestTaskFunc_ModifyEvalSpan(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify the custom attributes appear on the eval span
+	// No scorers: task + eval = 2 spans.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 3) // task + score + eval
+	require.Len(t, spans, 2)
 
-	// Find the eval span
-	evalSpan := spans[2]
+	evalSpan := spans[1]
 	evalSpan.AssertNameIs("eval")
 	evalSpan.AssertAttrEquals("custom.eval.attribute", "eval-value")
 	evalSpan.AssertAttrEquals("custom.model", "gpt-4")
@@ -587,19 +614,19 @@ func TestTaskFunc_ReturnsTaskResult(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify the TaskResult.Value is properly extracted and used
+	// No scorers: 2 cases * (task + eval) = 4 spans.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 6) // 2 cases * (task + score + eval) = 6 spans
+	require.Len(t, spans, 4)
 
-	// First case - verify output matches TaskResult.Value
+	// First case
 	spans[0].AssertNameIs("task")
 	spans[0].AssertJSONAttrEquals("braintrust.output_json", map[string]any{
 		"result": "processed-test1",
 	})
 
 	// Second case
-	spans[3].AssertNameIs("task")
-	spans[3].AssertJSONAttrEquals("braintrust.output_json", map[string]any{
+	spans[2].AssertNameIs("task")
+	spans[2].AssertJSONAttrEquals("braintrust.output_json", map[string]any{
 		"result": "processed-test2",
 	})
 }
@@ -626,9 +653,9 @@ func TestTaskFunc_TAdapter(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify the adapted task works correctly
+	// No scorers: task + eval = 2 spans.
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 3) // task + score + eval
+	require.Len(t, spans, 2)
 
 	// Verify output from simple task
 	spans[0].AssertNameIs("task")
@@ -667,10 +694,8 @@ func TestEval_ParallelWithTaskErrors(t *testing.T) {
 	assert.NotNil(t, result)
 
 	spans := ute.exporter.Flush()
-	// 2 successful cases: 3 spans each (task+score+eval)
-	// 2 failed cases: 2 spans each (task+eval, no score)
-	// Total: 2*3 + 2*2 = 10 spans
-	assert.Len(t, spans, 10)
+	// No scorers: 4 cases * (task + eval) = 8 spans
+	assert.Len(t, spans, 8)
 
 	// Count error spans
 	errorCount := 0
@@ -718,18 +743,17 @@ func TestEval_ParallelWithScorerErrors(t *testing.T) {
 	assert.NotNil(t, result)
 
 	spans := ute.exporter.Flush()
-	// All tasks succeed, all have scores (some with errors)
-	// 4 cases * 3 spans each = 12 spans
+	// 1 scorer per case: 4 cases * (task + conditional + eval) = 12 spans
 	assert.Len(t, spans, 12)
 
-	// Count score spans with errors
-	scoreErrorCount := 0
+	// Count scorer spans with errors (scorer is named "conditional")
+	scorerErrorCount := 0
 	for _, span := range spans {
-		if span.Name() == "score" && span.Status().Code == codes.Error {
-			scoreErrorCount++
+		if span.Name() == "conditional" && span.Status().Code == codes.Error {
+			scorerErrorCount++
 		}
 	}
-	assert.Equal(t, 2, scoreErrorCount) // 2 failed scorers
+	assert.Equal(t, 2, scorerErrorCount) // 2 failed scorers
 }
 
 func TestEval_ParallelAllTasksFail(t *testing.T) {
@@ -807,8 +831,8 @@ func TestEval_ParallelWithIteratorErrors(t *testing.T) {
 	assert.NotNil(t, result)
 
 	spans := ute.exporter.Flush()
-	// 3 successful cases * 3 spans + 1 iterator error span = 10 spans
-	assert.Len(t, spans, 10)
+	// No scorers: 3 successful cases * 2 spans (task+eval) + 1 iterator error span = 7 spans
+	assert.Len(t, spans, 7)
 }
 
 // customCases allows custom Next() implementation for testing
@@ -831,8 +855,7 @@ func (c *customCases[I, R]) Version() string {
 func TestEval_ScoreMetadata_SingleScorer(t *testing.T) {
 	t.Parallel()
 
-	// Test single scorer with metadata - matches Python/TypeScript behavior
-	// Single score: metadata and output should be flat at top level
+	// Single scorer span: metadata and output are flat (not nested by scorer name).
 	cases := NewDataset([]Case[testInput, testOutput]{
 		{Input: testInput{Value: "test"}},
 	})
@@ -862,14 +885,17 @@ func TestEval_ScoreMetadata_SingleScorer(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
+	// task + with_metadata + eval = 3 spans
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 3) // task + score + eval
+	require.Len(t, spans, 3)
 
-	// Find the score span
 	scoreSpan := spans[1]
-	scoreSpan.AssertNameIs("score")
+	scoreSpan.AssertNameIs("with_metadata")
+	scoreSpan.AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{
+		"type": "score", "name": "with_metadata", "purpose": "scorer",
+	})
 
-	// For single score, metadata should be flat at top level
+	// Single score returned: metadata and output are flat.
 	scoreSpan.AssertJSONAttrEquals("braintrust.scores", map[string]any{"accuracy": 0.95})
 	scoreSpan.AssertJSONAttrEquals("braintrust.metadata", map[string]any{
 		"reasoning":  "Result is good",
@@ -883,8 +909,7 @@ func TestEval_ScoreMetadata_SingleScorer(t *testing.T) {
 func TestEval_ScoreMetadata_MultipleScorers(t *testing.T) {
 	t.Parallel()
 
-	// Test multiple scorers with mixed metadata - matches Python/TypeScript behavior
-	// Multiple scores: metadata and output should be nested by score name
+	// Two scorers each get their own span; within each span the single score is flat.
 	cases := NewDataset([]Case[testInput, testOutput]{
 		{Input: testInput{Value: "test"}},
 	})
@@ -917,32 +942,29 @@ func TestEval_ScoreMetadata_MultipleScorers(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
+	// task + with_metadata + without_metadata + eval = 4 spans
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 3)
+	require.Len(t, spans, 4)
 
-	scoreSpan := spans[1]
-	scoreSpan.AssertNameIs("score")
+	// "with_metadata" scorer span
+	withMeta := spans[1]
+	withMeta.AssertNameIs("with_metadata")
+	withMeta.AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{
+		"type": "score", "name": "with_metadata", "purpose": "scorer",
+	})
+	withMeta.AssertJSONAttrEquals("braintrust.scores", map[string]any{"accuracy": 0.95})
+	withMeta.AssertJSONAttrEquals("braintrust.metadata", map[string]any{"reasoning": "Good result"})
+	withMeta.AssertJSONAttrEquals("braintrust.output", map[string]any{"score": 0.95})
 
-	// For multiple scores, metadata is nested by score name
-	scoreSpan.AssertJSONAttrEquals("braintrust.scores", map[string]any{
-		"accuracy":         0.95,
-		"without_metadata": 0.8,
+	// "without_metadata" scorer span
+	withoutMeta := spans[2]
+	withoutMeta.AssertNameIs("without_metadata")
+	withoutMeta.AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{
+		"type": "score", "name": "without_metadata", "purpose": "scorer",
 	})
-	// Only scores with metadata appear here
-	scoreSpan.AssertJSONAttrEquals("braintrust.metadata", map[string]any{
-		"accuracy": map[string]any{
-			"reasoning": "Good result",
-		},
-	})
-	// Output is nested by score name
-	scoreSpan.AssertJSONAttrEquals("braintrust.output", map[string]any{
-		"accuracy": map[string]any{
-			"score": 0.95,
-		},
-		"without_metadata": map[string]any{
-			"score": 0.8,
-		},
-	})
+	withoutMeta.AssertJSONAttrEquals("braintrust.scores", map[string]any{"without_metadata": 0.8})
+	withoutMeta.AssertJSONAttrEquals("braintrust.output", map[string]any{"score": 0.8})
+	assert.False(t, withoutMeta.HasAttr("braintrust.metadata"), "no metadata expected")
 }
 
 func TestEval_ScoreMetadata_NoMetadata(t *testing.T) {
@@ -968,12 +990,15 @@ func TestEval_ScoreMetadata_NoMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 
+	// task + no_metadata + eval = 3 spans
 	spans := ute.exporter.Flush()
 	require.Len(t, spans, 3)
 
 	scoreSpan := spans[1]
-	scoreSpan.AssertNameIs("score")
-
+	scoreSpan.AssertNameIs("no_metadata")
+	scoreSpan.AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{
+		"type": "score", "name": "no_metadata", "purpose": "scorer",
+	})
 	scoreSpan.AssertJSONAttrEquals("braintrust.scores", map[string]any{
 		"no_metadata": 0.5,
 	})
@@ -1055,18 +1080,6 @@ func TestEval_OriginAttributeFromDataset(t *testing.T) {
 	evalSpan.AssertNameIs("eval")
 
 	// Verify origin attribute is set with the case's dataset fields
-	// For now, we'll check that it's not present (since we haven't implemented it yet)
-	// After implementation, this should pass with the expected origin structure
-	//
-	// Expected structure (after implementation):
-	// evalSpan.AssertJSONAttrEquals("braintrust.origin", map[string]any{
-	// 	"object_type": "dataset",
-	// 	"id":          "event-abc123",
-	// 	"created":     "2024-01-15T10:30:00Z",
-	// 	"_xact_id":    "xact-def456",
-	// })
-
-	// For now, just verify it's not there (test should fail, then we'll implement)
 	assert.True(t, evalSpan.HasAttr("braintrust.origin"), "Origin should be set for dataset cases")
 }
 
@@ -1105,6 +1118,7 @@ func TestEval_NoOriginAttributeForInMemoryCase(t *testing.T) {
 	// Verify origin attribute is NOT present
 	assert.False(t, evalSpan.HasAttr("braintrust.origin"), "Origin should not be set for in-memory cases")
 }
+
 func TestEval_ParentPropagation(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
@@ -1136,7 +1150,6 @@ func TestEval_ParentPropagation(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(taskParent, trace.Parent{Type: trace.ParentTypeExperimentID, ID: result.ID()})
 	assert.Equal(scorerParent, trace.Parent{Type: trace.ParentTypeExperimentID, ID: result.ID()})
-
 }
 
 func TestTaskOutput_UserData(t *testing.T) {
@@ -1182,8 +1195,9 @@ func TestTaskOutput_UserData(t *testing.T) {
 	assert.NotNil(t, result)
 
 	// CRITICAL: Verify UserData is NOT logged to spans
+	// 2 cases * (task + verify_userdata + eval) = 6 spans
 	spans := ute.exporter.Flush()
-	require.Len(t, spans, 6) // 2 cases * (task + score + eval) = 6 spans
+	require.Len(t, spans, 6)
 
 	// Check all spans - UserData should NOT appear in any attributes
 	for i, span := range spans {
@@ -1202,4 +1216,123 @@ func TestTaskOutput_UserData(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestEval_ScorerSpanInput verifies that each scorer span receives the full task result
+// (input, expected, output) as its braintrust.input_json.
+func TestEval_ScorerSpanInput(t *testing.T) {
+	t.Parallel()
+
+	cases := NewDataset([]Case[testInput, testOutput]{
+		{
+			Input:    testInput{Value: "hello"},
+			Expected: testOutput{Result: "world"},
+		},
+	})
+
+	task := T(func(ctx context.Context, input testInput) (testOutput, error) {
+		return testOutput{Result: "actual-output"}, nil
+	})
+
+	scorer := NewScorer("check_input", func(ctx context.Context, result TaskResult[testInput, testOutput]) (Scores, error) {
+		return S(1.0), nil
+	})
+
+	ute := newUnitTestEval(t, cases, task, []Scorer[testInput, testOutput]{scorer}, 1)
+
+	ctx := context.Background()
+	_, err := ute.eval.run(ctx)
+	require.NoError(t, err)
+
+	spans := ute.exporter.Flush()
+	require.Len(t, spans, 3) // task + check_input + eval
+
+	scorerSpan := spans[1]
+	scorerSpan.AssertNameIs("check_input")
+	scorerSpan.AssertJSONAttrEquals("braintrust.input_json", map[string]any{
+		"input":    map[string]any{"value": "hello"},
+		"expected": map[string]any{"result": "world"},
+		"output":   map[string]any{"result": "actual-output"},
+	})
+}
+
+// TestEval_EvalSpanAttrsOnTaskFailure verifies that the eval span has input/expected set
+// and output_json set to null even when the task fails.
+func TestEval_EvalSpanAttrsOnTaskFailure(t *testing.T) {
+	t.Parallel()
+
+	cases := NewDataset([]Case[testInput, testOutput]{
+		{
+			Input:    testInput{Value: "failing-input"},
+			Expected: testOutput{Result: "never-reached"},
+			Metadata: map[string]interface{}{"key": "meta"},
+			Tags:     []string{"tag1"},
+		},
+	})
+
+	task := T(func(ctx context.Context, input testInput) (testOutput, error) {
+		return testOutput{}, errors.New("task exploded")
+	})
+
+	ute := newUnitTestEval(t, cases, task, nil, 1)
+
+	ctx := context.Background()
+	_, err := ute.eval.run(ctx)
+	require.Error(t, err)
+
+	// task + eval = 2 spans (no scorer spans since task failed)
+	spans := ute.exporter.Flush()
+	require.Len(t, spans, 2)
+
+	evalSpan := spans[1]
+	evalSpan.AssertNameIs("eval")
+	assert.Equal(t, codes.Error, evalSpan.Status().Code)
+
+	// These attrs are set upfront, before the task runs.
+	evalSpan.AssertJSONAttrEquals("braintrust.input_json", map[string]any{"value": "failing-input"})
+	evalSpan.AssertJSONAttrEquals("braintrust.expected", map[string]any{"result": "never-reached"})
+	evalSpan.AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{"type": "eval"})
+	evalSpan.AssertJSONAttrEquals("braintrust.metadata", map[string]any{"key": "meta"})
+
+	// Tags are stored as a string-slice attribute (not JSON).
+	var foundTags []string
+	for _, attr := range evalSpan.Stub.Attributes {
+		if string(attr.Key) == "braintrust.tags" {
+			foundTags = attr.Value.AsStringSlice()
+			break
+		}
+	}
+	assert.Equal(t, []string{"tag1"}, foundTags)
+
+	// output_json is explicitly set to null on task failure.
+	evalSpan.AssertJSONAttrEquals("braintrust.output_json", nil)
+}
+
+// TestEval_TaskSpanNullOutputOnFailure verifies that the task span gets output_json=null
+// when the task errors.
+func TestEval_TaskSpanNullOutputOnFailure(t *testing.T) {
+	t.Parallel()
+
+	cases := NewDataset([]Case[testInput, testOutput]{
+		{Input: testInput{Value: "bad"}},
+	})
+
+	task := T(func(ctx context.Context, input testInput) (testOutput, error) {
+		return testOutput{}, errors.New("task failed")
+	})
+
+	ute := newUnitTestEval(t, cases, task, nil, 1)
+
+	ctx := context.Background()
+	_, err := ute.eval.run(ctx)
+	require.Error(t, err)
+
+	spans := ute.exporter.Flush()
+	require.Len(t, spans, 2) // task + eval
+
+	taskSpan := spans[0]
+	taskSpan.AssertNameIs("task")
+	assert.Equal(t, codes.Error, taskSpan.Status().Code)
+	// output_json must be null (not absent) on failure.
+	taskSpan.AssertJSONAttrEquals("braintrust.output_json", nil)
 }
