@@ -414,16 +414,16 @@ func (e *eval[I, R]) runNextCase(ctx context.Context, nextCase nextCase[I, R]) e
 // runCase orchestrates task + scorers for one case.
 func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I, R]) error {
 	// Set all non-output attributes upfront so they're captured even if the task fails.
-	upfront := map[string]any{
+	attrs := map[string]any{
 		"braintrust.span_attributes": evalSpanAttrs,
 		"braintrust.input_json":      c.Input,
 		"braintrust.expected":        c.Expected,
 	}
 	if c.Metadata != nil {
-		upfront["braintrust.metadata"] = c.Metadata
+		attrs["braintrust.metadata"] = c.Metadata
 	}
 	if c.ID != "" && c.XactID != "" {
-		upfront["braintrust.origin"] = map[string]any{
+		attrs["braintrust.origin"] = map[string]any{
 			"object_type": "dataset",
 			"object_id":   e.datasetID,
 			"id":          c.ID,
@@ -431,7 +431,7 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 			"_xact_id":    c.XactID,
 		}
 	}
-	if err := setJSONAttrs(span, upfront); err != nil {
+	if err := setJSONAttrs(span, attrs); err != nil {
 		return err
 	}
 	if c.Tags != nil {
@@ -441,7 +441,7 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 	taskResult, err := e.runTask(ctx, span, c)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		_ = setJSONAttr(span, "braintrust.output_json", nil)
+		_ = setJSONAttr(span, "braintrust.output_json", nil) // explicitly record no output was produced
 		return err
 	}
 
@@ -491,7 +491,7 @@ func (e *eval[I, R]) runTask(ctx context.Context, evalSpan oteltrace.Span, c Cas
 	if err != nil {
 		taskErr := fmt.Errorf("%w: %w", errTaskRun, err)
 		recordSpanError(taskSpan, taskErr)
-		_ = setJSONAttr(taskSpan, "braintrust.output_json", nil)
+		_ = setJSONAttr(taskSpan, "braintrust.output_json", nil) // explicitly record no output was produced
 		return TaskResult[I, R]{}, taskErr
 	}
 
