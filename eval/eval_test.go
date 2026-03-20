@@ -327,9 +327,6 @@ func TestEval_Run_TaskError(t *testing.T) {
 	spans[3].AssertJSONAttrEquals("braintrust.input_json", map[string]any{"value": "error"})
 	spans[3].AssertJSONAttrEquals("braintrust.expected", map[string]any{"result": ""})
 	spans[3].AssertJSONAttrEquals("braintrust.span_attributes", map[string]any{"type": "eval"})
-	// output_json is set to null on task failure.
-	spans[3].AssertJSONAttrEquals("braintrust.output_json", nil)
-
 	// Third case succeeds (task, eval)
 	spans[4].AssertNameIs("task")
 	spans[5].AssertNameIs("eval")
@@ -1304,35 +1301,4 @@ func TestEval_EvalSpanAttrsOnTaskFailure(t *testing.T) {
 	}
 	assert.Equal(t, []string{"tag1"}, foundTags)
 
-	// output_json is explicitly set to null on task failure.
-	evalSpan.AssertJSONAttrEquals("braintrust.output_json", nil)
-}
-
-// TestEval_TaskSpanNullOutputOnFailure verifies that the task span gets output_json=null
-// when the task errors.
-func TestEval_TaskSpanNullOutputOnFailure(t *testing.T) {
-	t.Parallel()
-
-	cases := NewDataset([]Case[testInput, testOutput]{
-		{Input: testInput{Value: "bad"}},
-	})
-
-	task := T(func(ctx context.Context, input testInput) (testOutput, error) {
-		return testOutput{}, errors.New("task failed")
-	})
-
-	ute := newUnitTestEval(t, cases, task, nil, 1)
-
-	ctx := context.Background()
-	_, err := ute.eval.run(ctx)
-	require.Error(t, err)
-
-	spans := ute.exporter.Flush()
-	require.Len(t, spans, 2) // task + eval
-
-	taskSpan := spans[0]
-	taskSpan.AssertNameIs("task")
-	assert.Equal(t, codes.Error, taskSpan.Status().Code)
-	// output_json must be null (not absent) on failure.
-	taskSpan.AssertJSONAttrEquals("braintrust.output_json", nil)
 }

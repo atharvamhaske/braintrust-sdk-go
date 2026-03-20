@@ -441,7 +441,6 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 	taskResult, err := e.runTask(ctx, span, c)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
-		_ = setJSONAttr(span, "braintrust.output_json", nil) // explicitly record no output was produced
 		return err
 	}
 
@@ -491,7 +490,6 @@ func (e *eval[I, R]) runTask(ctx context.Context, evalSpan oteltrace.Span, c Cas
 	if err != nil {
 		taskErr := fmt.Errorf("%w: %w", errTaskRun, err)
 		recordSpanError(taskSpan, taskErr)
-		_ = setJSONAttr(taskSpan, "braintrust.output_json", nil) // explicitly record no output was produced
 		return TaskResult[I, R]{}, taskErr
 	}
 
