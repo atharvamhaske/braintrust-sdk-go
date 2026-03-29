@@ -179,6 +179,10 @@ func TestNewEval_Success(t *testing.T) {
 		},
 	})
 
+	// Task and scorer spans are children of the eval span.
+	spans[0].AssertChildOf(&spans[2])
+	spans[1].AssertChildOf(&spans[2])
+
 	spans[2].AssertEqual(oteltest.TestSpan{
 		Name: "eval",
 		Attrs: map[string]any{
@@ -229,6 +233,10 @@ func TestNewEval_Success(t *testing.T) {
 			"braintrust.output":   map[string]any{"score": 0.95},
 		},
 	})
+
+	// Task and scorer spans are children of the eval span.
+	spans[3].AssertChildOf(&spans[5])
+	spans[4].AssertChildOf(&spans[5])
 
 	spans[5].AssertEqual(oteltest.TestSpan{
 		Name: "eval",

@@ -531,7 +531,7 @@ func (e *eval[I, R]) runScorers(ctx context.Context, taskResult TaskResult[I, R]
 
 // runScorer executes a single scorer in its own span named after the scorer.
 func (e *eval[I, R]) runScorer(ctx context.Context, scorer Scorer[I, R], taskResult TaskResult[I, R]) ([]Score, error) {
-	_, span := e.tracer.Start(ctx, scorer.Name(), e.startSpanOpt)
+	ctx, span := e.tracer.Start(ctx, scorer.Name(), e.startSpanOpt)
 	defer span.End()
 
 	spanAttrs := map[string]any{
