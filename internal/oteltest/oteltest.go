@@ -117,6 +117,15 @@ func (s *Span) AssertNameIs(expected string) {
 	assert.Equal(s.t, expected, s.Stub.Name)
 }
 
+// AssertChildOf asserts that this span is a child of the given parent span.
+func (s *Span) AssertChildOf(parent *Span) {
+	s.t.Helper()
+	assert.Equal(s.t, parent.Stub.SpanContext.SpanID(), s.Stub.Parent.SpanID(),
+		"expected span %q to be a child of span %q", s.Stub.Name, parent.Stub.Name)
+	assert.Equal(s.t, parent.Stub.SpanContext.TraceID(), s.Stub.SpanContext.TraceID(),
+		"expected span %q to share trace ID with parent span %q", s.Stub.Name, parent.Stub.Name)
+}
+
 // AssertInTimeRange asserts that the span's start and end times are within the given time range.
 func (s *Span) AssertInTimeRange(tr TimeRange) {
 	s.t.Helper()
