@@ -438,6 +438,67 @@ func assertSpanValid(t *testing.T, span oteltest.Span, timeRange oteltest.TimeRa
 	assert.NotNil(span.Output())
 }
 
+// TestStreamingWithThinking tests tracing with streaming and extended thinking enabled
+func TestStreamingWithThinking(t *testing.T) {
+	client, exporter := setUpTest(t)
+
+	timer := oteltest.NewTimer()
+	ctx := context.Background()
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 16000,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("What is 27 * 453?")),
+		},
+		Thinking: anthropic.ThinkingConfigParamOfEnabled(10000),
+	})
+
+	var thinkingText, responseText string
+
+	for stream.Next() {
+		event := stream.Current()
+		switch eventVariant := event.AsAny().(type) {
+		case anthropic.ContentBlockDeltaEvent:
+			switch deltaVariant := eventVariant.Delta.AsAny().(type) {
+			case anthropic.ThinkingDelta:
+				thinkingText += deltaVariant.Thinking
+			case anthropic.TextDelta:
+				responseText += deltaVariant.Text
+			}
+		}
+	}
+	require.NoError(t, stream.Err())
+	timeRange := timer.Tick()
+
+	// Verify we got thinking and response content from the stream
+	assert.NotEmpty(t, thinkingText, "should have received thinking text")
+	assert.NotEmpty(t, responseText, "should have received response text")
+
+	// Validate span
+	span := exporter.FlushOne()
+	assertSpanValid(t, span, timeRange)
+
+	// Verify the span output contains both thinking and text blocks
+	outputStr := span.Attr("braintrust.output_json").String()
+	assert.Contains(t, outputStr, `"type":"thinking"`)
+	assert.Contains(t, outputStr, `"type":"text"`)
+
+	// Verify thinking content was captured (not empty)
+	assert.Contains(t, outputStr, `"thinking":`)
+	assert.NotContains(t, outputStr, `"thinking":""`, "thinking content should not be empty")
+
+	// Verify signature was captured
+	assert.Contains(t, outputStr, `"signature":`)
+
+	// Verify the streamed text matches what's in the span
+	assert.Contains(t, outputStr, responseText[:10])
+
+	// Verify metadata
+	metadata := span.Metadata()
+	assert.Equal(t, true, metadata["stream"])
+	assert.NotNil(t, metadata["thinking"])
+}
+
 // TestMultipleMessages tests tracing with multiple messages (conversation history)
 func TestMultipleMessages(t *testing.T) {
 	client, exporter := setUpTest(t)
