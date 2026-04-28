@@ -194,6 +194,8 @@ func (rt *responsesTracer) handleResponseCompletedMessage(span trace.Span, rawMs
 		"reasoning",
 		"text",
 		"usage",
+		"incomplete_details",
+		"error",
 	}
 
 	for _, field := range metadataFields {
