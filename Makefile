@@ -97,9 +97,11 @@ mod-verify:
 		$(foreach dir,$(NESTED_MODULE_DIRS),$(dir)/go.mod $(dir)/go.sum) \
 		btx/go.mod btx/go.sum
 	./scripts/check_nested_modules.sh
+	./scripts/check_release_coverage.sh
 
 check-nested-modules:
 	./scripts/check_nested_modules.sh
+	./scripts/check_release_coverage.sh
 
 fix: fmt
 	golangci-lint run --fix
