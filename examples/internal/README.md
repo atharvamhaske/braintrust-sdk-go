@@ -27,6 +27,7 @@ Comprehensive examples testing all features for each AI provider:
 
 - **[langchaingo-anthropic/](langchaingo-anthropic/)** - LangChainGo with Anthropic provider (uses forked langchaingo)
 - **[functions/](functions/)** - Functions API usage (loading tasks/scorers with FunctionOpts)
+- **[braintrust-json/](braintrust-json/)** - Braintrust API key discovery from environment or `.braintrust.json`
 - **[rewrite/](rewrite/)** - Manual tracing and evaluator API testing
 - **[email-evals/](email-evals/)** - Realistic eval example with complex scoring
 - **[eval-updates/](eval-updates/)** - Testing Update option for appending to experiments

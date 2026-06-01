@@ -2,18 +2,27 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/braintrustdata/braintrust-sdk-go/internal/apikey"
 	"github.com/braintrustdata/braintrust-sdk-go/logger"
 )
+
+// APIKeyResolver resolves a Braintrust API key when one is not provided
+// explicitly or through the process environment.
+type APIKeyResolver interface {
+	APIKey(context.Context) (string, bool)
+}
 
 // Config holds immutable configuration for the Braintrust SDK.
 type Config struct {
 	APIKey             string
+	APIKeyResolver     APIKeyResolver
 	APIURL             string
 	AppURL             string
 	OrgName            string
@@ -37,7 +46,9 @@ type Config struct {
 // Return >0 to keep the span, <0 to drop the span, or 0 to not influence the decision.
 type SpanFilterFunc func(span trace.ReadOnlySpan) int
 
-// FromEnv loads configuration from environment variables with defaults.
+// FromEnv loads configuration from environment variables with defaults. If
+// BRAINTRUST_API_KEY is unset or blank, API key discovery can fall back to the
+// nearest .braintrust.json file when authentication or export first needs it.
 //
 // Supported environment variables:
 //   - BRAINTRUST_API_KEY: API key for authentication
@@ -52,8 +63,9 @@ type SpanFilterFunc func(span trace.ReadOnlySpan) int
 //   - BRAINTRUST_OTEL_ENABLE_BUILTIN_ADK_TRACES: Enable exporting spans from Google ADK's built-in telemetry (default: false)
 //   - BRAINTRUST_AUTO_CONVERT_AI_ATTACHMENTS: Scan spans for base64 attachments and upload them (default: true)
 func FromEnv() *Config {
-	return &Config{
-		APIKey:                   getEnvString("BRAINTRUST_API_KEY", ""),
+	apiKey := getEnvString("BRAINTRUST_API_KEY", "")
+	cfg := &Config{
+		APIKey:                   apiKey,
 		APIURL:                   getEnvString("BRAINTRUST_API_URL", "https://api.braintrust.dev"),
 		AppURL:                   getEnvString("BRAINTRUST_APP_URL", "https://www.braintrust.dev"),
 		OrgName:                  getEnvString("BRAINTRUST_ORG_NAME", ""),
@@ -65,6 +77,10 @@ func FromEnv() *Config {
 		EnableBuiltinAdkTraces:   getEnvBool("BRAINTRUST_OTEL_ENABLE_BUILTIN_ADK_TRACES", false),
 		AutoConvertAIAttachments: getEnvBool("BRAINTRUST_AUTO_CONVERT_AI_ATTACHMENTS", true),
 	}
+	if cfg.APIKey == "" {
+		cfg.APIKeyResolver = apikey.NewResolver()
+	}
+	return cfg
 }
 
 // getEnvString returns the trimmed environment variable value or the default
@@ -86,7 +102,7 @@ func getEnvBool(key string, defaultValue bool) bool {
 // IsValid checks if the configuration has all required fields.
 // Returns an error if any required field is missing.
 func (c *Config) IsValid() error {
-	if c.APIKey == "" {
+	if c.APIKey == "" && c.APIKeyResolver == nil {
 		return fmt.Errorf("API key is required")
 	}
 	if c.APIURL == "" {

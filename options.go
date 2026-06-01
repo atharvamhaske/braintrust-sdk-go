@@ -1,6 +1,8 @@
 package braintrust
 
 import (
+	"strings"
+
 	"go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/braintrustdata/braintrust-sdk-go/config"
@@ -10,10 +12,17 @@ import (
 // Option is a functional option for configuring a Braintrust client
 type Option func(*config.Config)
 
-// WithAPIKey sets the API key (overrides BRAINTRUST_API_KEY)
+// WithAPIKey sets a nonblank API key (overrides BRAINTRUST_API_KEY).
+// Blank or whitespace-only values are treated as unset and leave environment
+// and .braintrust.json fallback lookup available.
 func WithAPIKey(apiKey string) Option {
 	return func(c *config.Config) {
+		apiKey = strings.TrimSpace(apiKey)
+		if apiKey == "" {
+			return
+		}
 		c.APIKey = apiKey
+		c.APIKeyResolver = nil
 	}
 }
 
