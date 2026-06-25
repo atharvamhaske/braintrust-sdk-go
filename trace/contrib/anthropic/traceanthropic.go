@@ -36,6 +36,7 @@ package anthropic
 
 import (
 	"net/http"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -103,7 +104,7 @@ func NewMiddleware(opts ...MiddlewareOption) func(*http.Request, NextMiddleware)
 
 // anthropicRouter maps Anthropic API paths to their corresponding tracers.
 func anthropicRouter(cfg *middlewareConfig, path string) internal.MiddlewareTracer {
-	if path == "/v1/messages" {
+	if strings.HasSuffix(path, "/v1/messages") {
 		return newMessagesTracer(cfg)
 	}
 	return nil

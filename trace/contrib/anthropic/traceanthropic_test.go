@@ -90,6 +90,64 @@ func TestMiddleware(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestMiddlewareMatchesProxyPrefixedMessagesPath(t *testing.T) {
+	tp, exporter := oteltest.Setup(t)
+
+	requestBody := `{
+		"model": "claude-3-haiku-20240307",
+		"max_tokens": 1024,
+		"messages": [
+			{
+				"role": "user",
+				"content": "Hello, Claude!"
+			}
+		]
+	}`
+
+	req := httptest.NewRequest("POST", "/clapi/transparent/aws_bedrock/v1/messages", strings.NewReader(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	responseBody := `{
+		"id": "msg_01Aq9w938a90dw8q",
+		"type": "message",
+		"role": "assistant",
+		"content": [
+			{
+				"type": "text",
+				"text": "Hello! How can I help you today?"
+			}
+		],
+		"model": "claude-3-haiku-20240307",
+		"stop_reason": "end_turn",
+		"stop_sequence": null,
+		"usage": {
+			"input_tokens": 12,
+			"output_tokens": 9
+		}
+	}`
+
+	next := func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: 200,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(responseBody)),
+		}, nil
+	}
+
+	middleware := NewMiddleware(WithTracerProvider(tp)) //nolint:bodyclose // false positive - NewMiddleware returns middleware func
+	resp, err := middleware(req, next)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	_, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	span := exporter.FlushOne()
+	span.AssertNameIs("anthropic.messages.create")
+	assert.Equal(t, "/v1/messages", span.Metadata()["endpoint"])
+}
+
 func TestMessagesTracer(t *testing.T) {
 	tp, _ := oteltest.Setup(t)
 	cfg := &middlewareConfig{tracerProvider: tp}
