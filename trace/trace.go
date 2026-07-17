@@ -26,8 +26,12 @@ package trace
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -70,6 +74,14 @@ type Config struct {
 
 	// Logger
 	Logger logger.Logger
+
+	Environment *SpanOriginEnvironment
+}
+
+// SpanOriginEnvironment describes where spans are produced for span-origin provenance.
+type SpanOriginEnvironment struct {
+	Type string
+	Name string
 }
 
 // SpanFilterFunc decides which spans to send to Braintrust.
@@ -161,6 +173,7 @@ func GetSpanProcessor(session *auth.Session, cfg Config) (sdktrace.SpanProcessor
 		log,
 		ap,
 		uploader,
+		resolveEnvironment(cfg.Environment),
 	)
 	if err != nil {
 		return nil, err
@@ -287,8 +300,9 @@ const ParentOtelAttrKey = "braintrust.parent"
 
 // Internal attribute keys for Braintrust span metadata.
 const (
-	orgAttrKey    = "braintrust.org"
-	appURLAttrKey = "braintrust.app_url"
+	orgAttrKey         = "braintrust.org"
+	appURLAttrKey      = "braintrust.app_url"
+	contextJSONAttrKey = "braintrust.context_json"
 )
 
 type contextKey string
@@ -470,6 +484,7 @@ type spanProcessor struct {
 	logger              logger.Logger
 	attachmentProcessor *attachmentprocessor.Processor // nil when attachment processing is disabled
 	attachmentUploader  attachmentprocessor.Uploader   // nil when attachment processing is disabled
+	environment         *SpanOriginEnvironment
 }
 
 // newSpanProcessor creates a new span processor that wraps another processor and adds parent labeling.
@@ -482,6 +497,7 @@ func newSpanProcessor(
 	log logger.Logger,
 	ap *attachmentprocessor.Processor,
 	uploader attachmentprocessor.Uploader,
+	environment *SpanOriginEnvironment,
 ) (*spanProcessor, error) {
 	// Get app URL from session
 	appURL := session.AppPublicURL()
@@ -498,6 +514,7 @@ func newSpanProcessor(
 		logger:              log,
 		attachmentProcessor: ap,
 		attachmentUploader:  uploader,
+		environment:         environment,
 	}
 
 	return sp, nil
@@ -541,6 +558,172 @@ func (sp *spanProcessor) OnStart(ctx context.Context, span sdktrace.ReadWriteSpa
 	sp.wrapped.OnStart(ctx, span)
 }
 
+func spanOriginContextJSON(span sdktrace.ReadOnlySpan, environment *SpanOriginEnvironment) string {
+	origin := map[string]any{
+		"span_origin": map[string]any{
+			"name":            "braintrust.sdk.go",
+			"version":         sdkVersion(),
+			"instrumentation": map[string]any{"name": "braintrust-go"},
+		},
+	}
+	for _, attr := range span.Attributes() {
+		if attr.Key != contextJSONAttrKey {
+			continue
+		}
+		var existing map[string]any
+		if err := json.Unmarshal([]byte(attr.Value.AsString()), &existing); err == nil {
+			for key, value := range existing {
+				if key == "span_origin" {
+					continue
+				}
+				origin[key] = value
+			}
+			if existingOrigin, ok := existing["span_origin"].(map[string]any); ok {
+				spanOrigin, ok := origin["span_origin"].(map[string]any)
+				if ok {
+					for key, value := range existingOrigin {
+						spanOrigin[key] = value
+					}
+				}
+			}
+		}
+		break
+	}
+	if environment != nil {
+		spanOrigin, ok := origin["span_origin"].(map[string]any)
+		if !ok {
+			return "{}"
+		}
+		if _, exists := spanOrigin["environment"]; !exists {
+			env := map[string]any{}
+			if environment.Type != "" {
+				env["type"] = environment.Type
+			}
+			if environment.Name != "" {
+				env["name"] = environment.Name
+			}
+			spanOrigin["environment"] = env
+		}
+	}
+	data, err := json.Marshal(origin)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+func sdkVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Path == "github.com/braintrustdata/braintrust-sdk-go" && isReleaseVersion(info.Main.Version) {
+			return info.Main.Version
+		}
+		for _, dep := range info.Deps {
+			if dep.Path == "github.com/braintrustdata/braintrust-sdk-go" && isReleaseVersion(dep.Version) {
+				return dep.Version
+			}
+		}
+	}
+	return "unknown"
+}
+
+func isReleaseVersion(version string) bool {
+	return version != "" && version != "(devel)"
+}
+
+func resolveEnvironment(explicit *SpanOriginEnvironment) *SpanOriginEnvironment {
+	if explicit != nil {
+		return explicit
+	}
+	typ := envValue("BRAINTRUST_ENVIRONMENT_TYPE")
+	name := envValue("BRAINTRUST_ENVIRONMENT_NAME")
+	if typ != "" || name != "" {
+		return &SpanOriginEnvironment{Type: typ, Name: name}
+	}
+	for key, name := range map[string]string{
+		"GITHUB_ACTIONS": "github_actions", "GITLAB_CI": "gitlab_ci", "CIRCLECI": "circleci",
+		"BUILDKITE": "buildkite", "JENKINS_URL": "jenkins", "JENKINS_HOME": "jenkins",
+		"TF_BUILD": "azure_pipelines", "TEAMCITY_VERSION": "teamcity", "TRAVIS": "travis",
+		"BITBUCKET_BUILD_NUMBER": "bitbucket",
+	} {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return &SpanOriginEnvironment{Type: "ci", Name: name}
+		}
+	}
+	if os.Getenv("CI") != "" {
+		return &SpanOriginEnvironment{Type: "ci", Name: "ci"}
+	}
+	if name := detectServerEnvironmentName(); name != "" {
+		return &SpanOriginEnvironment{Type: "server", Name: name}
+	}
+	return nil
+}
+
+func detectServerEnvironmentName() string {
+	for key, name := range map[string]string{"VERCEL": "vercel", "NETLIFY": "netlify"} {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return name
+		}
+	}
+	if strings.TrimSpace(os.Getenv("ECS_CONTAINER_METADATA_URI")) != "" ||
+		strings.TrimSpace(os.Getenv("ECS_CONTAINER_METADATA_URI_V4")) != "" {
+		return "ecs"
+	}
+	if value := strings.TrimSpace(os.Getenv("AWS_EXECUTION_ENV")); strings.HasPrefix(value, "AWS_ECS_") {
+		return "ecs"
+	} else if strings.HasPrefix(value, "AWS_Lambda_") {
+		return "aws_lambda"
+	}
+	if strings.TrimSpace(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")) != "" {
+		return "aws_lambda"
+	}
+	for key, name := range map[string]string{
+		"K_SERVICE": "cloud_run", "FUNCTION_TARGET": "gcp_functions", "KUBERNETES_SERVICE_HOST": "kubernetes",
+		"DYNO": "heroku", "FLY_APP_NAME": "fly", "RAILWAY_ENVIRONMENT": "railway", "RENDER_SERVICE_NAME": "render",
+	} {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+func envValue(key string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return braintrustEnvFileValue(key)
+}
+
+func braintrustEnvFileValue(key string) string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for depth := 0; depth <= 64; depth++ {
+		envPath := filepath.Join(dir, ".env.braintrust")
+		if data, err := os.ReadFile(envPath); err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				name, value, ok := strings.Cut(line, "=")
+				if !ok || strings.TrimSpace(name) != key {
+					continue
+				}
+				return strings.Trim(strings.TrimSpace(value), `"'`)
+			}
+			return ""
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return ""
+}
+
 // OnEnd is called when a span ends.
 func (sp *spanProcessor) OnEnd(span sdktrace.ReadOnlySpan) {
 	// Apply filters to determine if we should forward this span
@@ -552,8 +735,15 @@ func (sp *spanProcessor) OnEnd(span sdktrace.ReadOnlySpan) {
 	if sp.attachmentProcessor != nil {
 		span = sp.processAttachments(span)
 	}
+	span = sp.addSpanOrigin(span)
 
 	sp.wrapped.OnEnd(span)
+}
+
+func (sp *spanProcessor) addSpanOrigin(span sdktrace.ReadOnlySpan) sdktrace.ReadOnlySpan {
+	overrides := make(map[attribute.Key]string)
+	overrides[contextJSONAttrKey] = spanOriginContextJSON(span, sp.environment)
+	return attachmentprocessor.NewTransformedSpan(span, overrides)
 }
 
 // processAttachments scans input_json and output_json for base64 attachments,
@@ -764,7 +954,10 @@ func aiSpanFilterFunc(span sdktrace.ReadOnlySpan) int {
 	for _, attr := range span.Attributes() {
 		attrKey := string(attr.Key)
 		// Skip system attributes that we automatically add to all spans
-		if attrKey == ParentOtelAttrKey || attrKey == orgAttrKey || attrKey == appURLAttrKey {
+		if attrKey == ParentOtelAttrKey ||
+			attrKey == orgAttrKey ||
+			attrKey == appURLAttrKey ||
+			attrKey == contextJSONAttrKey {
 			continue
 		}
 		for _, prefix := range aiOtelPrefixes {
