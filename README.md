@@ -129,7 +129,11 @@ If you prefer explicit control, you can add tracing middleware manually to your 
 
 ## Evaluations
 
-Run [evals](https://www.braintrust.dev/docs/guides/evals) with custom test cases and scoring functions:
+Run [evals](https://www.braintrust.dev/docs/guides/evals) with custom test cases and scoring functions.
+
+### Define and run
+
+Define an eval once with its task and scorers, then run it against any dataset:
 
 ```go
 package main
@@ -159,16 +163,9 @@ func main() {
         log.Fatal(err)
     }
 
-    // Create an evaluator with your task's input and output types
-    evaluator := braintrust.NewEvaluator[string, string](client)
-
-    // Run an evaluation
-    _, err = evaluator.Run(ctx, eval.Opts[string, string]{
-        Experiment: "greeting-experiment",
-        Dataset: eval.NewDataset([]eval.Case[string, string]{
-            {Input: "World", Expected: "Hello World"},
-            {Input: "Alice", Expected: "Hello Alice"},
-        }),
+    // Create an eval
+    e := braintrust.NewEval(client, &eval.Eval[string, string]{
+        Name: "greeting-experiment",
         Task: eval.T(func(ctx context.Context, input string) (string, error) {
             return "Hello " + input, nil
         }),
@@ -182,11 +179,85 @@ func main() {
             }),
         },
     })
+
+    // Run against a dataset
+    _, err = e.Run(ctx, eval.RunOpts[string, string]{
+        Dataset: eval.NewDataset([]eval.Case[string, string]{
+            {Input: "World", Expected: "Hello World"},
+            {Input: "Alice", Expected: "Hello Alice"},
+        }),
+    })
     if err != nil {
         log.Fatal(err)
     }
 }
 ```
+
+### Remote Evals
+
+The same eval definition can be run from the Braintrust playground against code on your own
+infrastructure, using [remote evals](https://www.braintrust.dev/docs/evaluate/remote-evals).
+
+The [`bt` CLI](https://www.braintrust.dev/docs/reference/cli) owns the HTTP endpoint, authentication
+and CORS; your program just registers its evals and hands control to the runner:
+
+```go
+package main
+
+import (
+    "context"
+    "strings"
+
+    "github.com/braintrustdata/braintrust-sdk-go/eval"
+    "github.com/braintrustdata/braintrust-sdk-go/evalrunner"
+)
+
+func main() {
+    // Define the eval once
+    classify := &eval.Eval[string, string]{
+        Name: "classify",
+        Task: eval.TaskWithHooks(func(ctx context.Context, input string, hooks *eval.TaskHooks) (string, error) {
+            // Parameters configured in the playground arrive here.
+            if hooks.Parameters.String("style") == "lower" {
+                return strings.ToLower(input), nil
+            }
+            return strings.ToUpper(input), nil
+        }),
+
+        // Each entry becomes a control in the playground.
+        ParameterSchema: eval.ParameterSchema{
+            "style": {Type: "string", Default: "upper", Description: "upper or lower"},
+        },
+        Scorers: []eval.Scorer[string, string]{
+            eval.NewScorer("exact_match", func(ctx context.Context, r eval.TaskResult[string, string]) (eval.Scores, error) {
+                if r.Output == r.Expected { return eval.S(1.0), nil }
+                return eval.S(0.0), nil
+            }),
+        },
+        Dataset: eval.NewDataset([]eval.Case[string, string]{
+            {Input: "hello", Expected: "HELLO"},
+        }),
+    }
+
+    r := evalrunner.New()
+    evalrunner.RegisterEval(r, classify)
+
+    evalrunner.Main(r)
+}
+```
+
+Put that in its own package directory (Go compiles a directory, not a file) and point `bt` at it:
+
+```bash
+bt eval --dev --language go ./cmd/evals
+```
+
+Then add `http://localhost:8300` in your Braintrust project settings under **Remote evals**, open a
+playground, and pick your eval under **+ Task → Remote eval**.
+
+The same program also works without the playground: `bt eval ./cmd/evals` runs every registered eval
+from the command line, and running the binary directly (`go run ./cmd/evals`) prints what is
+registered without contacting Braintrust.
 
 ## API Client
 
@@ -286,10 +357,12 @@ Complete working examples are available in [`examples/`](./examples/):
 - **[prompts](./examples/prompts/main.go)** - Use Braintrust hosted prompts
 - **[distributed-tracing](./examples/distributed-tracing/main.go)** - W3C baggage propagation across services
 - **[otel](./examples/otel/main.go)** - Add Braintrust to existing OpenTelemetry setup
+- **[eval-runner](./examples/internal/eval-runner/)** - Remote evals driven by the `bt` CLI
 
 ## Features
 
 - **Evaluations** - Systematic testing with custom scoring functions
+- **Remote Evals** - Run evals from the Braintrust UI against your own code
 - **Tracing** - Automatic instrumentation for major LLM providers
 - **Datasets** - Manage and version evaluation datasets
 - **Experiments** - Track versions and configurations
