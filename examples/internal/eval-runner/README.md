@@ -1,5 +1,7 @@
 # Remote Eval Runner Example
 
+*This feature is currently in Public Preview: its use or behavior may change in future versions.*
+
 This example runs Braintrust evals **under the `bt` CLI**, so the Braintrust playground can
 trigger evaluations against code running on your own machine. Outputs stream back to the UI
 and results are recorded as an experiment.
