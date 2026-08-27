@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -342,6 +343,69 @@ func TestEvalMode_ClosesTheSocketEvenOnFailure(t *testing.T) {
 
 	// collected() fails the test if the socket never closed.
 	assert.NotEmpty(t, bt.collected(t))
+}
+
+// A case where one scorer fails but another succeeds must still contribute the
+// successful score to the summary; the failure must not discard it.
+func TestEvalMode_PartialScorerFailureKeepsHealthyScores(t *testing.T) {
+	bt := startFakeBT(t)
+
+	requestJSON, err := json.Marshal(map[string]any{
+		"name": "partial-failure",
+		"data": map[string]any{
+			"data": []map[string]any{
+				{"input": "a", "expected": "a"},
+				{"input": "b", "expected": "b"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	r, _ := newTestRunner(t, map[string]string{
+		"BT_EVAL_DEV_MODE":         "eval",
+		"BT_EVAL_DEV_REQUEST_JSON": string(requestJSON),
+		"BT_EVAL_SSE_SOCK":         bt.sockPath,
+	})
+	r.newSession = vcrSession(t)
+	registerPartialFailure(r)
+
+	require.NoError(t, Run(context.Background(), r))
+
+	frames := bt.collected(t)
+
+	var summary summaryEvent
+	require.NoError(t, json.Unmarshal([]byte(firstFrame(t, frames, "summary").data), &summary))
+
+	// The healthy scorer ran on both cases and must be averaged over both,
+	// even though the other scorer errored on each case.
+	healthy, ok := summary.Scores["healthy"]
+	require.True(t, ok, "the healthy score was dropped: %v", summary.Scores)
+	assert.InDelta(t, 1.0, healthy.Score, 0.0001)
+
+	// Both cases reached scoring, so both cells are marked done.
+	doneCount := 0
+	for _, f := range frames {
+		if f.event == "progress" && strings.Contains(f.data, `"event":"done"`) {
+			doneCount++
+		}
+	}
+	assert.Equal(t, 2, doneCount, "each scored case should emit a done frame")
+}
+
+func registerPartialFailure(r *Runner) {
+	RegisterEval(r, &eval.Eval[string, string]{
+		Name:        "partial-failure",
+		Task:        eval.T(func(_ context.Context, input string) (string, error) { return input, nil }),
+		ProjectName: "go-sdk-tests",
+		Scorers: []eval.Scorer[string, string]{
+			eval.NewScorer("healthy", func(_ context.Context, res eval.TaskResult[string, string]) (eval.Scores, error) {
+				return eval.S(1.0), nil
+			}),
+			eval.NewScorer("broken", func(_ context.Context, _ eval.TaskResult[string, string]) (eval.Scores, error) {
+				return nil, errors.New("scorer boom")
+			}),
+		},
+	})
 }
 
 func registerFoodClassifier(r *Runner) {

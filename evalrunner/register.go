@@ -126,9 +126,17 @@ func (r *registeredEvalImpl[I, R]) run(ctx context.Context, cfg *evalRunConfig) 
 	scores := newScoreAccumulator()
 
 	onComplete := func(cp eval.CaseProgress) {
-		if cp.Error != nil {
+		// A task-level failure produces neither output nor scores (Scores is
+		// nil); there is nothing to stream, and the error is recorded on the
+		// span, which the UI reads separately.
+		if cp.Scores == nil {
 			return
 		}
+
+		// A case that reached scoring can still carry an error -- one scorer of
+		// several may have failed -- but the scores that did succeed, and the
+		// task output, are real. Accumulate before streaming so a partial
+		// failure does not drop healthy scores from the summary average.
 		scores.add(cp.Scores)
 
 		// Only the output travels here. Per-case scores reach Braintrust as
