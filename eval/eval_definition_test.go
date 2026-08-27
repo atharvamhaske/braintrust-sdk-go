@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/braintrustdata/braintrust-sdk-go/internal/evalhooks"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -93,12 +95,14 @@ func TestMergeOpts_CarriesOnExperimentStart(t *testing.T) {
 
 	called := false
 	opts, err := mergeOpts(ev, RunOpts[testInput, testOutput]{
-		OnExperimentStart: func(ExperimentInfo) { called = true },
+		Hooks: &evalhooks.Hooks{
+			OnExperimentStart: func(evalhooks.ExperimentInfo) { called = true },
+		},
 	})
 	require.NoError(t, err)
 
-	require.NotNil(t, opts.OnExperimentStart)
-	opts.OnExperimentStart(ExperimentInfo{})
+	require.NotNil(t, opts.Hooks)
+	opts.Hooks.ExperimentStart(evalhooks.ExperimentInfo{})
 	assert.True(t, called)
 }
 

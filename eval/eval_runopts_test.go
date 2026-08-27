@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/braintrustdata/braintrust-sdk-go/internal/evalhooks"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -62,18 +64,18 @@ func TestMergeOpts_FieldResolution(t *testing.T) {
 	dataset := NewDataset([]Case[testInput, testOutput]{
 		{Input: testInput{Value: "x"}},
 	})
-	callback := func(CaseProgress) {}
+	hooks := &evalhooks.Hooks{OnCaseComplete: func(evalhooks.CaseProgress) {}}
 
 	ro := RunOpts[testInput, testOutput]{
-		Dataset:        dataset,
-		Tags:           []string{"tag1"},
-		Metadata:       map[string]any{"k": "v"},
-		Update:         true,
-		Parallelism:    4,
-		Quiet:          true,
-		OnCaseComplete: callback,
-		SpanParent:     bttrace.NewParent(bttrace.ParentTypePlaygroundID, "pg-1"),
-		Generation:     42,
+		Dataset:     dataset,
+		Tags:        []string{"tag1"},
+		Metadata:    map[string]any{"k": "v"},
+		Update:      true,
+		Parallelism: 4,
+		Quiet:       true,
+		Hooks:       hooks,
+		SpanParent:  bttrace.NewParent(bttrace.ParentTypePlaygroundID, "pg-1"),
+		Generation:  42,
 	}
 
 	opts, err := mergeOpts(ev, ro)
@@ -92,7 +94,7 @@ func TestMergeOpts_FieldResolution(t *testing.T) {
 	assert.True(t, opts.Update)
 	assert.Equal(t, 4, opts.Parallelism)
 	assert.True(t, opts.Quiet)
-	assert.NotNil(t, opts.OnCaseComplete)
+	assert.NotNil(t, opts.Hooks)
 	assert.Equal(t, bttrace.NewParent(bttrace.ParentTypePlaygroundID, "pg-1"), opts.SpanParent)
 	assert.Equal(t, 42, opts.Generation)
 }

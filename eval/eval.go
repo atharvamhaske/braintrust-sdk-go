@@ -42,6 +42,7 @@ import (
 
 	"github.com/braintrustdata/braintrust-sdk-go/api"
 	"github.com/braintrustdata/braintrust-sdk-go/internal/auth"
+	"github.com/braintrustdata/braintrust-sdk-go/internal/evalhooks"
 	bttrace "github.com/braintrustdata/braintrust-sdk-go/trace"
 )
 
@@ -87,20 +88,11 @@ type Opts[I, R any] struct {
 	TrialCount  int      // Number of times to run each case (default: 1)
 	Quiet       bool     // Suppress result output (default: false)
 
-	// OnCaseComplete is called after each case completes (task + scorers).
-	// It is called from worker goroutines and must be safe for concurrent use.
-	// Optional — nil means no callback.
-	OnCaseComplete func(CaseProgress)
-
-	// OnExperimentStart is called once, after the experiment has been registered
-	// and before any case runs. It is the only way to learn the experiment's
-	// identity while the run is still in flight — the returned [Result] is not
-	// available until the run finishes.
-	//
-	// The remote eval runner uses this to tell the Braintrust playground which
-	// experiment a run is writing to, so the UI can link to it immediately.
-	// Optional — nil means no callback.
-	OnExperimentStart func(ExperimentInfo)
+	// Hooks carries in-flight run callbacks. Its type lives under internal/, so
+	// only this module can populate it: the remote eval runner needs them, and
+	// the shape of eval callbacks is not settled across the Braintrust SDKs
+	// yet. Optional — a nil Hooks fires nothing.
+	Hooks *evalhooks.Hooks
 
 	// SpanParent overrides the parent attribute set on eval spans.
 	// When zero, the default "experiment_id:<id>" parent is used.
@@ -116,18 +108,6 @@ type Opts[I, R any] struct {
 	// via [TaskHooks.Parameters]. Callers going through [Eval.Run] get this from
 	// [ParameterSchema.Resolve]; setting it directly bypasses the schema.
 	Parameters Parameters
-}
-
-// CaseProgress contains the result of a single completed evaluation case.
-// It is passed to the [Opts.OnCaseComplete] callback.
-type CaseProgress struct {
-	Output any
-	Scores map[string]float64
-	Error  error
-	// ID is the eval span ID, used to correlate SSE progress events with OTLP span data.
-	ID string
-	// Origin contains dataset provenance when the case came from a dataset.
-	Origin map[string]any
 }
 
 // Eval defines an evaluation: the task to run and the scorers to apply.
@@ -218,20 +198,11 @@ type RunOpts[I, R any] struct {
 	// Quiet suppresses result output (default: false).
 	Quiet bool
 
-	// OnCaseComplete is called after each case completes (task + scorers).
-	// It is called from worker goroutines and must be safe for concurrent use.
-	// Optional — nil means no callback.
-	OnCaseComplete func(CaseProgress)
-
-	// OnExperimentStart is called once, after the experiment has been registered
-	// and before any case runs. It is the only way to learn the experiment's
-	// identity while the run is still in flight — the returned [Result] is not
-	// available until the run finishes.
-	//
-	// The remote eval runner uses this to tell the Braintrust playground which
-	// experiment a run is writing to, so the UI can link to it immediately.
-	// Optional — nil means no callback.
-	OnExperimentStart func(ExperimentInfo)
+	// Hooks carries in-flight run callbacks. Its type lives under internal/, so
+	// only this module can populate it: the remote eval runner needs them, and
+	// the shape of eval callbacks is not settled across the Braintrust SDKs
+	// yet. Optional — a nil Hooks fires nothing.
+	Hooks *evalhooks.Hooks
 
 	// SpanParent overrides the parent attribute set on eval spans.
 	// When zero, the default "experiment_id:<id>" parent is used.
@@ -249,20 +220,6 @@ type RunOpts[I, R any] struct {
 	// playground request; most direct runs leave it empty and get the declared
 	// defaults.
 	Parameters Parameters
-}
-
-// ExperimentInfo identifies the experiment a run is writing to. It is passed to
-// [RunOpts.OnExperimentStart] once the experiment has been registered, before
-// any case runs.
-type ExperimentInfo struct {
-	ExperimentID   string
-	ExperimentName string
-	ProjectID      string
-	ProjectName    string
-
-	// ExperimentURL links to the experiment in the Braintrust UI. Empty when
-	// the org name or experiment ID could not be determined.
-	ExperimentURL string
 }
 
 // mergeOpts combines an Eval definition with RunOpts into an Opts for
@@ -291,22 +248,21 @@ func mergeOpts[I, R any](ev *Eval[I, R], ro RunOpts[I, R]) (Opts[I, R], error) {
 	}
 
 	return Opts[I, R]{
-		Experiment:        experiment,
-		Dataset:           dataset,
-		ProjectID:         ro.ProjectID,
-		Task:              ev.Task,
-		Scorers:           ev.Scorers,
-		ProjectName:       projectName,
-		Tags:              ro.Tags,
-		Metadata:          ro.Metadata,
-		Update:            ro.Update,
-		Parallelism:       ro.Parallelism,
-		Quiet:             ro.Quiet,
-		OnCaseComplete:    ro.OnCaseComplete,
-		OnExperimentStart: ro.OnExperimentStart,
-		SpanParent:        ro.SpanParent,
-		Generation:        ro.Generation,
-		Parameters:        parameters,
+		Experiment:  experiment,
+		Dataset:     dataset,
+		ProjectID:   ro.ProjectID,
+		Task:        ev.Task,
+		Scorers:     ev.Scorers,
+		ProjectName: projectName,
+		Tags:        ro.Tags,
+		Metadata:    ro.Metadata,
+		Update:      ro.Update,
+		Parallelism: ro.Parallelism,
+		Quiet:       ro.Quiet,
+		Hooks:       ro.Hooks,
+		SpanParent:  ro.SpanParent,
+		Generation:  ro.Generation,
+		Parameters:  parameters,
 	}, nil
 }
 
@@ -474,7 +430,7 @@ type eval[I, R any] struct {
 	goroutines     int
 	trialCount     int
 	quiet          bool
-	onCaseComplete func(CaseProgress)
+	hooks          *evalhooks.Hooks
 	generation     any
 	parameters     Parameters
 }
@@ -502,7 +458,7 @@ func newEval[I, R any](
 	parallelism int,
 	trialCount int,
 	quiet bool,
-	onCaseComplete func(CaseProgress),
+	hooks *evalhooks.Hooks,
 	spanParent bttrace.Parent,
 	generation any,
 	parameters Parameters,
@@ -529,11 +485,6 @@ func newEval[I, R any](
 		trialCount = 1
 	}
 
-	// Default to noop so callers don't need nil checks
-	if onCaseComplete == nil {
-		onCaseComplete = func(CaseProgress) {}
-	}
-
 	return &eval[I, R]{
 		session:        s,
 		parent:         parent,
@@ -551,7 +502,7 @@ func newEval[I, R any](
 		goroutines:     goroutines,
 		trialCount:     trialCount,
 		quiet:          quiet,
-		onCaseComplete: onCaseComplete,
+		hooks:          hooks,
 		generation:     generation,
 		parameters:     parameters,
 	}
@@ -604,7 +555,7 @@ func newEvalOpts[I, R any](ctx context.Context, s *auth.Session, tp *trace.Trace
 		opts.Parallelism,
 		opts.TrialCount,
 		opts.Quiet,
-		opts.OnCaseComplete,
+		opts.Hooks,
 		opts.SpanParent,
 		opts.Generation,
 		opts.Parameters,
@@ -763,7 +714,7 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 
 	taskResult, err := e.runTask(ctx, span, c, trialIndex)
 	if err != nil {
-		e.onCaseComplete(CaseProgress{Error: err, ID: spanID, Origin: origin})
+		e.hooks.CaseComplete(evalhooks.CaseProgress{Error: err, ID: spanID, Origin: origin})
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -803,7 +754,7 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 	for _, s := range scores {
 		scoreMap[s.Name] = s.Score
 	}
-	e.onCaseComplete(CaseProgress{
+	e.hooks.CaseComplete(evalhooks.CaseProgress{
 		Output: taskResult.Output,
 		Scores: scoreMap,
 		Error:  joined,
@@ -1167,15 +1118,13 @@ func run[I, R any](ctx context.Context, opts Opts[I, R], s *auth.Session, tp *tr
 	// The experiment now exists. This is the first point where its identity and
 	// permalink are both known, and the last point before cases start running,
 	// so it is where an observer can be told which experiment to link to.
-	if opts.OnExperimentStart != nil {
-		opts.OnExperimentStart(ExperimentInfo{
-			ExperimentID:   e.experimentID,
-			ExperimentName: e.experimentName,
-			ProjectID:      e.projectID,
-			ProjectName:    e.projectName,
-			ExperimentURL:  e.permalink(),
-		})
-	}
+	opts.Hooks.ExperimentStart(evalhooks.ExperimentInfo{
+		ExperimentID:   e.experimentID,
+		ExperimentName: e.experimentName,
+		ProjectID:      e.projectID,
+		ProjectName:    e.projectName,
+		ExperimentURL:  e.permalink(),
+	})
 
 	// Run evaluation
 	return e.run(ctx)

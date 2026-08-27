@@ -10,6 +10,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/braintrustdata/braintrust-sdk-go/eval"
+	"github.com/braintrustdata/braintrust-sdk-go/internal/evalhooks"
 	bttrace "github.com/braintrustdata/braintrust-sdk-go/trace"
 )
 
@@ -125,7 +126,7 @@ func (r *registeredEvalImpl[I, R]) run(ctx context.Context, cfg *evalRunConfig) 
 
 	scores := newScoreAccumulator()
 
-	onComplete := func(cp eval.CaseProgress) {
+	onComplete := func(cp evalhooks.CaseProgress) {
 		// A task-level failure produces neither output nor scores (Scores is
 		// nil); there is nothing to stream, and the error is recorded on the
 		// span, which the UI reads separately.
@@ -171,7 +172,7 @@ func (r *registeredEvalImpl[I, R]) run(ctx context.Context, cfg *evalRunConfig) 
 
 	// Tells the playground which experiment this run is writing to, while it is
 	// still running, so the UI can link to it before the summary arrives.
-	onExperimentStart := func(info eval.ExperimentInfo) {
+	onExperimentStart := func(info evalhooks.ExperimentInfo) {
 		if err := cfg.sink.send("start", startEvent{
 			ProjectName:    info.ProjectName,
 			ExperimentName: info.ExperimentName,
@@ -191,20 +192,19 @@ func (r *registeredEvalImpl[I, R]) run(ctx context.Context, cfg *evalRunConfig) 
 	evaluator := eval.NewEvaluator[I, R](cfg.session.session, tp, cfg.session.api, r.projectName())
 	e := eval.NewEval(evaluator, r.def)
 	result, evalErr := e.Run(evalCtx, eval.RunOpts[I, R]{
-		Experiment: experimentName,
-		Dataset:    dataset,
-		// The playground tells us which project the experiment belongs to. Using
-		// it avoids creating a project by name, which the caller's token may well
-		// not be allowed to do -- it is the browser user's token, not ours.
-		ProjectID:         req.ProjectID,
-		ProjectName:       r.projectName(),
-		Update:            true,
-		Quiet:             true,
-		OnCaseComplete:    onComplete,
-		OnExperimentStart: onExperimentStart,
-		SpanParent:        spanParent,
-		Generation:        generation,
-		Parameters:        cfg.parameters,
+		Experiment:  experimentName,
+		Dataset:     dataset,
+		ProjectID:   req.ProjectID,
+		ProjectName: r.projectName(),
+		Update:      true,
+		Quiet:       true,
+		Hooks: &evalhooks.Hooks{
+			OnCaseComplete:    onComplete,
+			OnExperimentStart: onExperimentStart,
+		},
+		SpanParent: spanParent,
+		Generation: generation,
+		Parameters: cfg.parameters,
 	})
 
 	// Flush before the summary so the UI can poll for scores the moment it

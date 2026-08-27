@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/braintrustdata/braintrust-sdk-go/internal/evalhooks"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
@@ -1279,8 +1281,8 @@ func TestOnCaseComplete_Callback(t *testing.T) {
 
 	// Track callback invocations
 	var mu sync.Mutex
-	var progresses []CaseProgress
-	callback := func(cp CaseProgress) {
+	var progresses []evalhooks.CaseProgress
+	callback := func(cp evalhooks.CaseProgress) {
 		mu.Lock()
 		progresses = append(progresses, cp)
 		mu.Unlock()
@@ -1297,7 +1299,7 @@ func TestOnCaseComplete_Callback(t *testing.T) {
 		"proj-callback", "callback-project",
 		cases, task,
 		[]Scorer[testInput, testOutput]{scorer},
-		nil, 1, 1, true, callback, trace.Parent{}, nil, nil,
+		nil, 1, 1, true, &evalhooks.Hooks{OnCaseComplete: callback}, trace.Parent{}, nil, nil,
 	)
 
 	result, err := e.run(context.Background())
@@ -1329,8 +1331,8 @@ func TestOnCaseComplete_CallbackOnError(t *testing.T) {
 	})
 
 	var called bool
-	var capturedProgress CaseProgress
-	callback := func(cp CaseProgress) {
+	var capturedProgress evalhooks.CaseProgress
+	callback := func(cp evalhooks.CaseProgress) {
 		called = true
 		capturedProgress = cp
 	}
@@ -1344,7 +1346,7 @@ func TestOnCaseComplete_CallbackOnError(t *testing.T) {
 		"exp-err", "err-experiment",
 		"proj-err", "err-project",
 		cases, task,
-		nil, nil, 1, 1, true, callback, trace.Parent{}, nil, nil,
+		nil, nil, 1, 1, true, &evalhooks.Hooks{OnCaseComplete: callback}, trace.Parent{}, nil, nil,
 	)
 
 	_, _ = e.run(context.Background())
@@ -1405,8 +1407,8 @@ func TestOnCaseComplete_Parallel(t *testing.T) {
 	})
 
 	var mu sync.Mutex
-	var progresses []CaseProgress
-	callback := func(cp CaseProgress) {
+	var progresses []evalhooks.CaseProgress
+	callback := func(cp evalhooks.CaseProgress) {
 		mu.Lock()
 		progresses = append(progresses, cp)
 		mu.Unlock()
@@ -1422,7 +1424,7 @@ func TestOnCaseComplete_Parallel(t *testing.T) {
 		"proj-parallel", "parallel-project",
 		cases, task,
 		[]Scorer[testInput, testOutput]{scorer},
-		nil, 4, 1, true, callback, trace.Parent{}, nil, nil,
+		nil, 4, 1, true, &evalhooks.Hooks{OnCaseComplete: callback}, trace.Parent{}, nil, nil,
 	)
 
 	result, err := e.run(context.Background())
@@ -1451,8 +1453,8 @@ func TestCaseProgress_IDIsSpanID(t *testing.T) {
 		return testOutput{Result: "ok"}, nil
 	})
 
-	var capturedProgress CaseProgress
-	callback := func(cp CaseProgress) {
+	var capturedProgress evalhooks.CaseProgress
+	callback := func(cp evalhooks.CaseProgress) {
 		capturedProgress = cp
 	}
 
@@ -1465,7 +1467,7 @@ func TestCaseProgress_IDIsSpanID(t *testing.T) {
 		"exp-id", "id-experiment",
 		"proj-id", "id-project",
 		cases, task,
-		nil, nil, 1, 1, true, callback, trace.Parent{}, nil, nil,
+		nil, nil, 1, 1, true, &evalhooks.Hooks{OnCaseComplete: callback}, trace.Parent{}, nil, nil,
 	)
 
 	_, err := e.run(context.Background())
@@ -1492,8 +1494,8 @@ func TestCaseProgress_OriginFromDataset(t *testing.T) {
 		return testOutput{Result: "ok"}, nil
 	})
 
-	var capturedProgress CaseProgress
-	callback := func(cp CaseProgress) {
+	var capturedProgress evalhooks.CaseProgress
+	callback := func(cp evalhooks.CaseProgress) {
 		capturedProgress = cp
 	}
 
@@ -1506,7 +1508,7 @@ func TestCaseProgress_OriginFromDataset(t *testing.T) {
 		"exp-origin", "origin-experiment",
 		"proj-origin", "origin-project",
 		cases, task,
-		nil, nil, 1, 1, true, callback, trace.Parent{}, nil, nil,
+		nil, nil, 1, 1, true, &evalhooks.Hooks{OnCaseComplete: callback}, trace.Parent{}, nil, nil,
 	)
 
 	_, err := e.run(context.Background())
@@ -1529,8 +1531,8 @@ func TestCaseProgress_OriginNilWithoutDatasetID(t *testing.T) {
 		return testOutput{Result: "ok"}, nil
 	})
 
-	var capturedProgress CaseProgress
-	callback := func(cp CaseProgress) {
+	var capturedProgress evalhooks.CaseProgress
+	callback := func(cp evalhooks.CaseProgress) {
 		capturedProgress = cp
 	}
 
@@ -1543,7 +1545,7 @@ func TestCaseProgress_OriginNilWithoutDatasetID(t *testing.T) {
 		"exp-no-origin", "no-origin-experiment",
 		"proj-no-origin", "no-origin-project",
 		cases, task,
-		nil, nil, 1, 1, true, callback, trace.Parent{}, nil, nil,
+		nil, nil, 1, 1, true, &evalhooks.Hooks{OnCaseComplete: callback}, trace.Parent{}, nil, nil,
 	)
 
 	_, err := e.run(context.Background())
