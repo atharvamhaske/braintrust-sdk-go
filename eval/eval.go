@@ -42,6 +42,7 @@ import (
 
 	"github.com/braintrustdata/braintrust-sdk-go/api"
 	"github.com/braintrustdata/braintrust-sdk-go/internal/auth"
+	"github.com/braintrustdata/braintrust-sdk-go/internal/evalhooks"
 	bttrace "github.com/braintrustdata/braintrust-sdk-go/trace"
 )
 
@@ -52,12 +53,6 @@ var (
 	errClassifier   = errors.New("classifier error")
 	errTaskRun      = errors.New("task run error")
 	errCaseIterator = errors.New("case iterator error")
-)
-
-var (
-	// braintrust "span_attributes" for each type of eval span.
-	evalSpanAttrs = map[string]any{"type": "eval"}
-	taskSpanAttrs = map[string]any{"type": "task"}
 )
 
 // Opts defines the options for running an evaluation.
@@ -85,12 +80,190 @@ type Opts[I, R any] struct {
 
 	// Optional
 	ProjectName string   // Project name (uses default from config if not specified)
+	ProjectID   string   // Project ID; when set, takes precedence over ProjectName and skips project creation
 	Tags        []string // Tags to apply to the experiment
 	Metadata    Metadata // Metadata to attach to the experiment
 	Update      bool     // If true, append to existing experiment (default: false)
 	Parallelism int      // Number of goroutines (default: 1)
 	TrialCount  int      // Number of times to run each case (default: 1)
 	Quiet       bool     // Suppress result output (default: false)
+
+	// Hooks carries in-flight run callbacks. Its type lives under internal/, so
+	// only this module can populate it: the remote eval runner needs them, and
+	// the shape of eval callbacks is not settled across the Braintrust SDKs
+	// yet. Optional — a nil Hooks fires nothing.
+	Hooks *evalhooks.Hooks
+
+	// SpanParent overrides the parent attribute set on eval spans.
+	// When zero, the default "experiment_id:<id>" parent is used.
+	// The remote eval server sets this to link spans to a playground context.
+	SpanParent bttrace.Parent
+
+	// Generation is propagated from the parent context (e.g. a Braintrust playground
+	// invocation) and injected into braintrust.span_attributes on every span.
+	// The Braintrust backend uses it to link eval spans back to the triggering context.
+	Generation any
+
+	// Parameters holds the already-resolved parameter values surfaced to the task
+	// via [TaskHooks.Parameters]. Callers going through [Eval.Run] get this from
+	// [ParameterSchema.Resolve]; setting it directly bypasses the schema.
+	Parameters Parameters
+}
+
+// Eval defines an evaluation: the task to run and the scorers to apply.
+// Create one with [braintrust.NewEval], then call [Eval.Run] to execute it
+// or pass it to a remote eval server.
+type Eval[I, R any] struct {
+	// Name is the eval name. Used as the default experiment name and as
+	// the registration key when registered with a remote eval server.
+	Name string
+
+	// Task is the function under evaluation.
+	Task TaskFunc[I, R]
+
+	// Scorers are the scoring functions applied to each task result.
+	Scorers []Scorer[I, R]
+
+	// ParameterSchema declares the parameters this eval accepts. Declaring them
+	// makes each one a control in the Braintrust playground; the values a user
+	// configures there reach the task via [TaskHooks.Parameters], merged over
+	// the defaults declared here.
+	//
+	// Optional. Parameters are a property of the eval, so the same definition
+	// carries them whether it is run locally, from the CLI, or from a playground.
+	ParameterSchema ParameterSchema
+
+	// Dataset is the eval's own set of test cases. Optional: callers that pass
+	// [RunOpts.Dataset] override it, which is what the Braintrust playground
+	// does. It is the only source of data for a standalone run or for
+	// `bt eval <package dir>`, which supply no cases of their own.
+	Dataset Dataset[I, R]
+
+	// ProjectName is the Braintrust project for this eval.
+	// Optional; falls back to the default project from the client.
+	ProjectName string
+
+	// evaluator holds the infrastructure (session, tracer, API client)
+	// needed to run the eval. Set by NewEval / braintrust.NewEval.
+	evaluator *Evaluator[I, R]
+}
+
+// NewEval creates a runnable Eval by attaching an [Evaluator] as the default
+// runner. Users should call braintrust.NewEval rather than this directly.
+func NewEval[I, R any](evaluator *Evaluator[I, R], e *Eval[I, R]) *Eval[I, R] {
+	e.evaluator = evaluator
+	return e
+}
+
+// Run executes the evaluation using the default [Evaluator].
+func (e *Eval[I, R]) Run(ctx context.Context, opts RunOpts[I, R]) (*Result, error) {
+	merged, err := mergeOpts(e, opts)
+	if err != nil {
+		return nil, err
+	}
+	return e.evaluator.Run(ctx, merged)
+}
+
+// RunOpts configures a single evaluation run. These vary per invocation;
+// the [Eval] definition stays the same.
+type RunOpts[I, R any] struct {
+	// Experiment overrides the experiment name. Defaults to [Eval.Name].
+	Experiment string
+
+	// ProjectName overrides the project name. Defaults to [Eval.ProjectName].
+	ProjectName string
+
+	// ProjectID names the project by ID instead of by name. When set it takes
+	// precedence over ProjectName, and the project is used as-is rather than
+	// created — which is what a caller whose credentials cannot create
+	// projects needs. The Braintrust playground sends this.
+	ProjectID string
+
+	// Dataset is the test cases to evaluate against.
+	// Defaults to [Eval.Dataset]; required if the eval defines none.
+	Dataset Dataset[I, R]
+
+	// Tags to apply to the experiment.
+	Tags []string
+
+	// Metadata to attach to the experiment.
+	Metadata Metadata
+
+	// Update appends to an existing experiment when true (default: false).
+	Update bool
+
+	// Parallelism is the number of goroutines (default: 1).
+	Parallelism int
+
+	// Quiet suppresses result output (default: false).
+	Quiet bool
+
+	// Hooks carries in-flight run callbacks. Its type lives under internal/, so
+	// only this module can populate it: the remote eval runner needs them, and
+	// the shape of eval callbacks is not settled across the Braintrust SDKs
+	// yet. Optional — a nil Hooks fires nothing.
+	Hooks *evalhooks.Hooks
+
+	// SpanParent overrides the parent attribute set on eval spans.
+	// When zero, the default "experiment_id:<id>" parent is used.
+	// The remote eval server sets this to link spans to a playground context.
+	SpanParent bttrace.Parent
+
+	// Generation is propagated from the parent context (e.g. a Braintrust playground
+	// invocation) and injected into braintrust.span_attributes on every span.
+	// The Braintrust backend uses it to link eval spans back to the triggering context.
+	Generation any
+
+	// Parameters supplies values for this run. They are merged over the defaults
+	// declared in [Eval.ParameterSchema] and surfaced to the task via
+	// [TaskHooks.Parameters]. The remote eval runner sets this from the
+	// playground request; most direct runs leave it empty and get the declared
+	// defaults.
+	Parameters Parameters
+}
+
+// mergeOpts combines an Eval definition with RunOpts into an Opts for
+// backward-compatible delegation to the existing run() function.
+func mergeOpts[I, R any](ev *Eval[I, R], ro RunOpts[I, R]) (Opts[I, R], error) {
+	experiment := ro.Experiment
+	if experiment == "" {
+		experiment = ev.Name
+	}
+
+	projectName := ro.ProjectName
+	if projectName == "" {
+		projectName = ev.ProjectName
+	}
+
+	dataset := ro.Dataset
+	if dataset == nil {
+		dataset = ev.Dataset
+	}
+
+	// Resolved here so a declared default reaches the task on every path -- a
+	// local run, the CLI, or a playground request that omits the value.
+	parameters, err := ev.ParameterSchema.Resolve(ro.Parameters)
+	if err != nil {
+		return Opts[I, R]{}, err
+	}
+
+	return Opts[I, R]{
+		Experiment:  experiment,
+		Dataset:     dataset,
+		ProjectID:   ro.ProjectID,
+		Task:        ev.Task,
+		Scorers:     ev.Scorers,
+		ProjectName: projectName,
+		Tags:        ro.Tags,
+		Metadata:    ro.Metadata,
+		Update:      ro.Update,
+		Parallelism: ro.Parallelism,
+		Quiet:       ro.Quiet,
+		Hooks:       ro.Hooks,
+		SpanParent:  ro.SpanParent,
+		Generation:  ro.Generation,
+		Parameters:  parameters,
+	}, nil
 }
 
 // Case represents a single test case in an evaluation.
@@ -186,6 +359,16 @@ func (r *Result) ID() string {
 	return r.key.experimentID
 }
 
+// ProjectID returns the project ID.
+func (r *Result) ProjectID() string {
+	return r.key.projectID
+}
+
+// ProjectName returns the project name.
+func (r *Result) ProjectName() string {
+	return r.key.projectName
+}
+
 // String returns a string representaton of the result for printing on the console.
 //
 // The format it prints will change and shouldn't be relied on for programmatic use.
@@ -247,6 +430,9 @@ type eval[I, R any] struct {
 	goroutines     int
 	trialCount     int
 	quiet          bool
+	hooks          *evalhooks.Hooks
+	generation     any
+	parameters     Parameters
 }
 
 // nextCase is a wrapper for sending cases through a channel.
@@ -272,9 +458,18 @@ func newEval[I, R any](
 	parallelism int,
 	trialCount int,
 	quiet bool,
+	hooks *evalhooks.Hooks,
+	spanParent bttrace.Parent,
+	generation any,
+	parameters Parameters,
 ) *eval[I, R] {
-	// Build parent span option
+	// Build parent span option. Use explicit override if provided (e.g. from
+	// the remote eval server linking spans to a playground), otherwise default
+	// to the experiment ID.
 	parent := bttrace.NewParent(bttrace.ParentTypeExperimentID, experimentID)
+	if !spanParent.IsZero() {
+		parent = spanParent
+	}
 	startSpanOpt := oteltrace.WithAttributes(parent.Attr())
 
 	// Extract dataset ID from dataset
@@ -307,6 +502,9 @@ func newEval[I, R any](
 		goroutines:     goroutines,
 		trialCount:     trialCount,
 		quiet:          quiet,
+		hooks:          hooks,
+		generation:     generation,
+		parameters:     parameters,
 	}
 }
 
@@ -319,14 +517,25 @@ func newEvalOpts[I, R any](ctx context.Context, s *auth.Session, tp *trace.Trace
 		projectName = project
 	}
 
-	// Register/get experiment (registerExperiment will validate that projectName is not empty)
-	exp, err := registerExperiment(ctx, apiClient, opts.Experiment, projectName, opts.Tags, opts.Metadata, opts.Update, opts.Dataset)
+	// Register/get experiment. registerExperiment validates that it has either a
+	// project ID or a non-empty project name.
+	exp, err := registerExperiment(ctx, apiClient, opts.Experiment, projectName, opts.ProjectID, opts.Tags, opts.Metadata, opts.Update, opts.Dataset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register experiment: %w", err)
 	}
 
 	// Get project ID from the experiment (it already has the project ID)
 	projectID := exp.ProjectID
+
+	// When the caller named the project by ID, report the project the
+	// experiment actually landed in rather than whatever name the eval happened
+	// to declare. Best-effort: a failed lookup is only a labelling problem and
+	// must not fail the run.
+	if opts.ProjectID != "" {
+		if project, err := apiClient.Projects().Get(ctx, projectID); err == nil && project.Name != "" {
+			projectName = project.Name
+		}
+	}
 
 	// Create tracer from injected TracerProvider (instead of global)
 	tracer := tp.Tracer("braintrust.eval")
@@ -346,7 +555,21 @@ func newEvalOpts[I, R any](ctx context.Context, s *auth.Session, tp *trace.Trace
 		opts.Parallelism,
 		opts.TrialCount,
 		opts.Quiet,
+		opts.Hooks,
+		opts.SpanParent,
+		opts.Generation,
+		opts.Parameters,
 	), nil
+}
+
+// spanAttrs builds span_attributes for the given span type, injecting
+// generation when set (used by the remote eval server).
+func (e *eval[I, R]) spanAttrs(spanType string) map[string]any {
+	attrs := map[string]any{"type": spanType}
+	if e.generation != nil {
+		attrs["generation"] = e.generation
+	}
+	return attrs
 }
 
 func (e *eval[I, R]) run(ctx context.Context) (*Result, error) {
@@ -450,7 +673,7 @@ func (e *eval[I, R]) runNextCase(ctx context.Context, nextCase nextCase[I, R]) e
 func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I, R], trialIndex int) error {
 	// Set all non-output attributes upfront so they're captured even if the task fails.
 	attrs := map[string]any{
-		"braintrust.span_attributes": evalSpanAttrs,
+		"braintrust.span_attributes": e.spanAttrs("eval"),
 		"braintrust.input_json":      c.Input,
 		"braintrust.expected":        c.Expected,
 	}
@@ -473,8 +696,25 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 		span.SetAttributes(attribute.StringSlice("braintrust.tags", c.Tags))
 	}
 
+	// Use the eval span ID as the progress event ID, matching Ruby's protocol.
+	// The UI correlates SSE progress events with OTLP span data using this ID.
+	spanID := span.SpanContext().SpanID().String()
+
+	// Build origin for progress tracking when case came from a dataset.
+	var origin map[string]any
+	if c.ID != "" && c.XactID != "" {
+		origin = map[string]any{
+			"object_type": "dataset",
+			"object_id":   e.datasetID,
+			"id":          c.ID,
+			"created":     c.Created,
+			"_xact_id":    c.XactID,
+		}
+	}
+
 	taskResult, err := e.runTask(ctx, span, c, trialIndex)
 	if err != nil {
+		e.hooks.CaseComplete(evalhooks.CaseProgress{Error: err, ID: spanID, Origin: origin})
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -487,6 +727,7 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 	// a failing scorer must not block classifiers (and vice versa), and
 	// per-pass errors are aggregated rather than fatal.
 	var (
+		scores        []Score
 		scorerErr     error
 		classifierErr error
 		wg            sync.WaitGroup
@@ -495,7 +736,7 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, scorerErr = e.runScorers(ctx, taskResult)
+			scores, scorerErr = e.runScorers(ctx, taskResult)
 		}()
 	}
 	if len(e.classifiers) > 0 {
@@ -507,7 +748,21 @@ func (e *eval[I, R]) runCase(ctx context.Context, span oteltrace.Span, c Case[I,
 	}
 	wg.Wait()
 
-	if joined := errors.Join(scorerErr, classifierErr); joined != nil {
+	joined := errors.Join(scorerErr, classifierErr)
+
+	scoreMap := make(map[string]float64, len(scores))
+	for _, s := range scores {
+		scoreMap[s.Name] = s.Score
+	}
+	e.hooks.CaseComplete(evalhooks.CaseProgress{
+		Output: taskResult.Output,
+		Scores: scoreMap,
+		Error:  joined,
+		ID:     spanID,
+		Origin: origin,
+	})
+
+	if joined != nil {
 		span.SetStatus(codes.Error, joined.Error())
 		return joined
 	}
@@ -523,7 +778,7 @@ func (e *eval[I, R]) runTask(ctx context.Context, evalSpan oteltrace.Span, c Cas
 	attrs := map[string]any{
 		"braintrust.input_json":      c.Input,
 		"braintrust.expected":        c.Expected,
-		"braintrust.span_attributes": taskSpanAttrs,
+		"braintrust.span_attributes": e.spanAttrs("task"),
 	}
 
 	var encodeErrs []error
@@ -541,6 +796,7 @@ func (e *eval[I, R]) runTask(ctx context.Context, evalSpan oteltrace.Span, c Cas
 		TrialIndex: trialIndex,
 		TaskSpan:   taskSpan,
 		EvalSpan:   evalSpan,
+		Parameters: e.parameters,
 	}
 
 	// Call task with new signature
@@ -592,12 +848,10 @@ func (e *eval[I, R]) runScorer(ctx context.Context, scorer Scorer[I, R], taskRes
 	ctx, span := e.tracer.Start(ctx, scorer.Name(), e.startSpanOpt)
 	defer span.End()
 
-	spanAttrs := map[string]any{
-		"type":    "score",
-		"name":    scorer.Name(),
-		"purpose": "scorer",
-	}
-	if err := setJSONAttr(span, "braintrust.span_attributes", spanAttrs); err != nil {
+	scorerAttrs := e.spanAttrs("score")
+	scorerAttrs["name"] = scorer.Name()
+	scorerAttrs["purpose"] = "scorer"
+	if err := setJSONAttr(span, "braintrust.span_attributes", scorerAttrs); err != nil {
 		return nil, err
 	}
 
@@ -861,6 +1115,17 @@ func run[I, R any](ctx context.Context, opts Opts[I, R], s *auth.Session, tp *tr
 		return nil, err
 	}
 
+	// The experiment now exists. This is the first point where its identity and
+	// permalink are both known, and the last point before cases start running,
+	// so it is where an observer can be told which experiment to link to.
+	opts.Hooks.ExperimentStart(evalhooks.ExperimentInfo{
+		ExperimentID:   e.experimentID,
+		ExperimentName: e.experimentName,
+		ProjectID:      e.projectID,
+		ProjectName:    e.projectName,
+		ExperimentURL:  e.permalink(),
+	})
+
 	// Run evaluation
 	return e.run(ctx)
 }
@@ -967,7 +1232,11 @@ func testNewEval[I, R any](
 		scorers,
 		classifiers,
 		parallelism,
-		1,    // trialCount=1 for tests
-		true, // quiet=true for tests
+		1,                // trialCount=1 for tests
+		true,             // quiet=true for tests
+		nil,              // no callback for tests
+		bttrace.Parent{}, // no parent override
+		nil,              // no generation
+		nil,              // no parameters
 	)
 }

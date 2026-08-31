@@ -129,7 +129,11 @@ If you prefer explicit control, you can add tracing middleware manually to your 
 
 ## Evaluations
 
-Run [evals](https://www.braintrust.dev/docs/guides/evals) with custom test cases and scoring functions:
+Run [evals](https://www.braintrust.dev/docs/guides/evals) with custom test cases and scoring functions.
+
+### Define and run
+
+Define an eval once with its task and scorers, then run it against any dataset:
 
 ```go
 package main
@@ -159,16 +163,9 @@ func main() {
         log.Fatal(err)
     }
 
-    // Create an evaluator with your task's input and output types
-    evaluator := braintrust.NewEvaluator[string, string](client)
-
-    // Run an evaluation
-    _, err = evaluator.Run(ctx, eval.Opts[string, string]{
-        Experiment: "greeting-experiment",
-        Dataset: eval.NewDataset([]eval.Case[string, string]{
-            {Input: "World", Expected: "Hello World"},
-            {Input: "Alice", Expected: "Hello Alice"},
-        }),
+    // Create an eval
+    e := braintrust.NewEval(client, &eval.Eval[string, string]{
+        Name: "greeting-experiment",
         Task: eval.T(func(ctx context.Context, input string) (string, error) {
             return "Hello " + input, nil
         }),
@@ -182,78 +179,17 @@ func main() {
             }),
         },
     })
-    if err != nil {
-        log.Fatal(err)
-    }
-}
-```
 
-## API Client
-
-Manage Braintrust resources programmatically:
-
-```go
-package main
-
-import (
-    "context"
-    "log"
-
-    "go.opentelemetry.io/otel/sdk/trace"
-
-    "github.com/braintrustdata/braintrust-sdk-go"
-    functionsapi "github.com/braintrustdata/braintrust-sdk-go/api/functions"
-)
-
-func main() {
-    ctx := context.Background()
-
-    // Create tracer provider
-    tp := trace.NewTracerProvider()
-    defer tp.Shutdown(ctx)
-
-    // Initialize Braintrust
-    client, err := braintrust.New(tp,
-        braintrust.WithProject("my-project"),
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Get API client
-    api := client.API()
-
-    // Create a prompt
-    prompt, err := api.Functions().Create(ctx, functionsapi.CreateParams{
-        ProjectID: "your-project-id",
-        Name:      "My Prompt",
-        Slug:      "my-prompt",
-        FunctionData: map[string]any{
-            "type": "prompt",
-        },
-        PromptData: map[string]any{
-            "prompt": map[string]any{
-                "type": "chat",
-                "messages": []map[string]any{
-                    {
-                        "role":    "system",
-                        "content": "You are a helpful assistant.",
-                    },
-                    {
-                        "role":    "user",
-                        "content": "{{input}}",
-                    },
-                },
-            },
-            "options": map[string]any{
-                "model": "gpt-4o-mini",
-            },
-        },
+    // Run against a dataset
+    _, err = e.Run(ctx, eval.RunOpts[string, string]{
+        Dataset: eval.NewDataset([]eval.Case[string, string]{
+            {Input: "World", Expected: "Hello World"},
+            {Input: "Alice", Expected: "Hello Alice"},
+        }),
     })
     if err != nil {
         log.Fatal(err)
     }
-    _ = prompt // Prompt is ready to use
 }
 ```
 

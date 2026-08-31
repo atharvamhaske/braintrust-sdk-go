@@ -24,6 +24,15 @@ type DatasetQueryOpts struct {
 	// ID is the dataset ID
 	ID string
 
+	// ProjectID scopes a Name lookup to one project. Dataset names are only
+	// unique within a project, so a Name query without ProjectID or
+	// ProjectName can match a dataset in an unrelated project.
+	ProjectID string
+
+	// ProjectName scopes a Name lookup to one project, as an alternative to
+	// ProjectID.
+	ProjectName string
+
 	// Version specifies a specific dataset version
 	Version string
 
@@ -61,6 +70,12 @@ func (d *DatasetAPI[I, R]) Query(ctx context.Context, opts DatasetQueryOpts) (Da
 	}
 	if opts.Name != "" {
 		queryParams.Name = opts.Name
+	}
+	if opts.ProjectID != "" {
+		queryParams.ProjectID = opts.ProjectID
+	}
+	if opts.ProjectName != "" {
+		queryParams.ProjectName = opts.ProjectName
 	}
 	if opts.Version != "" {
 		queryParams.Version = opts.Version
