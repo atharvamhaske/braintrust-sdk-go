@@ -7,6 +7,7 @@ toolchain go1.26.1
 require (
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic v0.12.0
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai v0.0.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai v0.12.0
@@ -20,6 +21,7 @@ require (
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.17.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/AssemblyAI/assemblyai-go-sdk v1.10.0 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.23.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
@@ -33,9 +35,11 @@ require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino v0.8.4 // indirect
+	github.com/coder/websocket v1.8.12 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect
@@ -46,6 +50,7 @@ require (
 	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/google/dotprompt/go v0.0.0-20251014011017-8d056e027254 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/safehtml v0.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -107,6 +112,7 @@ replace (
 	github.com/braintrustdata/braintrust-sdk-go => ../../..
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk => ../adk
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic => ../anthropic
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai => ../assemblyai
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime => ../bedrockruntime
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino => ../cloudwego/eino
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai => ../genai

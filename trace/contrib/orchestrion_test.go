@@ -169,6 +169,7 @@ func rewriteFixtureReplaceDirectives(t *testing.T, fixtureDir, repoRoot string) 
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk":                               filepath.Join(repoRoot, "trace", "contrib", "adk"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/all":                               filepath.Join(repoRoot, "trace", "contrib", "all"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic":                         filepath.Join(repoRoot, "trace", "contrib", "anthropic"),
+		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai":                        filepath.Join(repoRoot, "trace", "contrib", "assemblyai"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime":                    filepath.Join(repoRoot, "trace", "contrib", "bedrockruntime"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino":                    filepath.Join(repoRoot, "trace", "contrib", "cloudwego", "eino"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai":                             filepath.Join(repoRoot, "trace", "contrib", "genai"),

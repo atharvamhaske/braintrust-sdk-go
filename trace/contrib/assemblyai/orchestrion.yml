@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://datadoghq.dev/orchestrion/schema.json
+meta:
+  name: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai
+  description: Auto-instrumentation for AssemblyAI's LeMUR API with Braintrust tracing
+
+aspects:
+  # Intercept assemblyai.NewClientWithOptions and append a traced HTTP client option.
+  - id: assemblyai-newclientwithoptions-wrap
+    join-point:
+      function-call: github.com/AssemblyAI/assemblyai-go-sdk.NewClientWithOptions
+    advice:
+      - append-args:
+          type: github.com/AssemblyAI/assemblyai-go-sdk.ClientOption
+          values:
+            - imports:
+                traceassemblyai: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai
+                assemblyai: github.com/AssemblyAI/assemblyai-go-sdk
+              template: assemblyai.WithHTTPClient(traceassemblyai.Client())

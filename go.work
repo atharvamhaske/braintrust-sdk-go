@@ -8,6 +8,7 @@ use (
 	./examples
 	./trace/contrib/adk
 	./trace/contrib/all
+	./trace/contrib/assemblyai
 	./trace/contrib/anthropic
 	./trace/contrib/bedrockruntime
 	./trace/contrib/cloudwego/eino

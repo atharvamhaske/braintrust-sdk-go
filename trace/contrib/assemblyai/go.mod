@@ -1,0 +1,36 @@
+module github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai
+
+go 1.25.0
+
+toolchain go1.26.1
+
+require (
+	github.com/AssemblyAI/assemblyai-go-sdk v1.10.0
+	github.com/braintrustdata/braintrust-sdk-go v0.0.0
+	github.com/stretchr/testify v1.11.1
+	go.opentelemetry.io/otel v1.44.0
+	go.opentelemetry.io/otel/trace v1.44.0
+)
+
+require (
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/coder/websocket v1.8.12 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
+	go.opentelemetry.io/otel/metric v1.44.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	gopkg.in/dnaeon/go-vcr.v3 v3.2.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
+
+// Required: point to repo root so local development works in go.work mode.
+// The release pipeline pins v0.0.0 to the real version before tagging via
+// `go mod edit` + `GOWORK=off go mod tidy`; do NOT hand-edit it.
+replace github.com/braintrustdata/braintrust-sdk-go => ../../..
