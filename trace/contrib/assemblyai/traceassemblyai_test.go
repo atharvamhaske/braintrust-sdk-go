@@ -8,6 +8,7 @@ import (
 	assemblyai "github.com/AssemblyAI/assemblyai-go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/braintrustdata/braintrust-sdk-go/internal/oteltest"
 	"github.com/braintrustdata/braintrust-sdk-go/internal/vcr"
@@ -58,7 +59,7 @@ func TestLeMURTask(t *testing.T) {
 
 	span := exporter.FlushOne()
 	span.AssertInTimeRange(timeRange)
-	span.AssertNameIs("lemur_task")
+	span.AssertNameIs("assemblyai.lemur_task")
 
 	metadata := span.Metadata()
 	assert.Equal(t, "assemblyai", metadata["provider"])
@@ -95,7 +96,7 @@ func TestLeMURSummarize(t *testing.T) {
 
 	span := exporter.FlushOne()
 	span.AssertInTimeRange(timeRange)
-	span.AssertNameIs("lemur_summarize")
+	span.AssertNameIs("assemblyai.lemur_summarize")
 
 	metadata := span.Metadata()
 	assert.Equal(t, "summary", metadata["endpoint"])
@@ -120,7 +121,7 @@ func TestLeMURActionItems(t *testing.T) {
 
 	span := exporter.FlushOne()
 	span.AssertInTimeRange(timeRange)
-	span.AssertNameIs("lemur_action_items")
+	span.AssertNameIs("assemblyai.lemur_action_items")
 
 	metadata := span.Metadata()
 	assert.Equal(t, "action_items", metadata["endpoint"])
@@ -146,7 +147,7 @@ func TestLeMURQuestion(t *testing.T) {
 
 	span := exporter.FlushOne()
 	span.AssertInTimeRange(timeRange)
-	span.AssertNameIs("lemur_question_answer")
+	span.AssertNameIs("assemblyai.lemur_question_answer")
 
 	metadata := span.Metadata()
 	assert.Equal(t, "question_answer", metadata["endpoint"])
@@ -159,4 +160,25 @@ func TestLeMURQuestion(t *testing.T) {
 
 	metrics := span.Metrics()
 	assert.Greater(t, metrics["prompt_tokens"], float64(0))
+}
+
+// TestLeMURTaskError verifies error handling on a representative LeMUR
+// endpoint. The error path is shared middleware code (internal.Middleware()),
+// identical regardless of which LeMUR endpoint triggered it, so this single
+// test covers all four.
+func TestLeMURTaskError(t *testing.T) {
+	client, exporter := setUpTest(t)
+
+	_, err := client.LeMUR.Task(context.Background(), assemblyai.LeMURTaskParams{
+		Prompt: assemblyai.String("hi"),
+		LeMURBaseParams: assemblyai.LeMURBaseParams{
+			FinalModel: assemblyai.LeMURModel("bogus/nonexistent-model"),
+			InputText:  assemblyai.String("This is a transcript."),
+		},
+	})
+	require.Error(t, err)
+
+	span := exporter.FlushOne()
+	span.AssertNameIs("assemblyai.lemur_task")
+	assert.Equal(t, codes.Error, span.Stub.Status.Code)
 }

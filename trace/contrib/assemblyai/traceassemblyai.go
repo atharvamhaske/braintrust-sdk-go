@@ -147,13 +147,13 @@ func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 func lemurRouter(cfg *config, path string) internal.MiddlewareTracer {
 	switch {
 	case strings.HasSuffix(path, "/lemur/v3/generate/task"):
-		return newLeMURTracer(cfg, "lemur_task", "task", lemurOutputResponse)
+		return newLeMURTracer(cfg, "assemblyai.lemur_task", "task", lemurOutputResponse)
 	case strings.HasSuffix(path, "/lemur/v3/generate/summary"):
-		return newLeMURTracer(cfg, "lemur_summarize", "summary", lemurOutputResponse)
+		return newLeMURTracer(cfg, "assemblyai.lemur_summarize", "summary", lemurOutputResponse)
 	case strings.HasSuffix(path, "/lemur/v3/generate/action-items"):
-		return newLeMURTracer(cfg, "lemur_action_items", "action_items", lemurOutputResponse)
+		return newLeMURTracer(cfg, "assemblyai.lemur_action_items", "action_items", lemurOutputResponse)
 	case strings.HasSuffix(path, "/lemur/v3/generate/question-answer"):
-		return newLeMURTracer(cfg, "lemur_question_answer", "question_answer", lemurOutputQuestionAnswer)
+		return newLeMURTracer(cfg, "assemblyai.lemur_question_answer", "question_answer", lemurOutputQuestionAnswer)
 	}
 	return nil
 }
