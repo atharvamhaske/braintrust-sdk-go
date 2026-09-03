@@ -5,12 +5,10 @@ go 1.25.0
 toolchain go1.26.1
 
 require (
-	github.com/AssemblyAI/assemblyai-go-sdk v1.10.0
 	github.com/anthropics/anthropic-sdk-go v1.23.0
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.4
 	github.com/braintrustdata/braintrust-sdk-go v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic v0.12.0
-	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai v0.0.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit v0.12.0
@@ -31,11 +29,8 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.9 // indirect
-	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/coder/websocket v1.8.12 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 )
 
 require (
@@ -131,6 +126,5 @@ require (
 
 replace (
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk => ../trace/contrib/adk
-	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai => ../trace/contrib/assemblyai
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo => ../trace/contrib/langchaingo
 )

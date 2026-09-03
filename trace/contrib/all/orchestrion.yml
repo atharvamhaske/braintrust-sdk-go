@@ -80,17 +80,6 @@ aspects:
                 bt: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic
                 option: github.com/anthropics/anthropic-sdk-go/option
               template: option.WithMiddleware(bt.NewMiddleware())
-  - id: assemblyai-newclientwithoptions-wrap
-    join-point:
-      function-call: github.com/AssemblyAI/assemblyai-go-sdk.NewClientWithOptions
-    advice:
-      - append-args:
-          type: github.com/AssemblyAI/assemblyai-go-sdk.ClientOption
-          values:
-            - imports:
-                traceassemblyai: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai
-                assemblyai: github.com/AssemblyAI/assemblyai-go-sdk
-              template: assemblyai.WithHTTPClient(traceassemblyai.Client())
   - id: bedrockruntime-newfromconfig-wrap
     join-point:
       function-call: github.com/aws/aws-sdk-go-v2/service/bedrockruntime.NewFromConfig

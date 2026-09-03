@@ -19,7 +19,6 @@
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/openai (OpenAI official SDK)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic (Anthropic SDK)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime (AWS Bedrock Runtime)
-//   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai (AssemblyAI LeMUR)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai (Google GenAI)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/github.com/sashabaranov/go-openai (sashabaranov/go-openai)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk (Google ADK)
@@ -37,9 +36,6 @@ import (
 
 	// AWS Bedrock Runtime (github.com/aws/aws-sdk-go-v2/service/bedrockruntime)
 	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime"
-
-	// AssemblyAI LeMUR (github.com/AssemblyAI/assemblyai-go-sdk)
-	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai"
 
 	// Google GenAI (google.golang.org/genai)
 	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai"
