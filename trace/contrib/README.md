@@ -197,28 +197,3 @@ func main() {
 
 For richer traces, use `NewHandlerWithOptions` with `TracerProvider`, `Model`, and `Provider` options.
 See [`examples/langchaingo`](../../examples/langchaingo/main.go) for complete examples.
-
-## Model Context Protocol (MCP Go SDK)
-
-```go
-import (
-    "context"
-
-    "github.com/modelcontextprotocol/go-sdk/mcp"
-    tracemcp "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/mcp"
-)
-
-func main() {
-    ctx := context.Background()
-    client := mcp.NewClient(&mcp.Implementation{Name: "my-client"}, nil)
-    tracemcp.InstrumentClient(client)
-
-    server := mcp.NewServer(&mcp.Implementation{Name: "my-server"}, nil)
-    tracemcp.InstrumentServer(server)
-
-    // Connect client/server transports, then use session.ListTools and session.CallTool.
-    _, _ = ctx, client
-}
-```
-
-Instrument both the client and server when your process hosts MCP endpoints and also calls remote tools. Client middleware traces outgoing `tools/list` and `tools/call`; server middleware traces incoming tool discovery and handler execution.

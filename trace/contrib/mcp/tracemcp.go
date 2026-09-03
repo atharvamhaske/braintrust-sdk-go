@@ -12,22 +12,28 @@
 //		log.Fatal(err)
 //	}
 //
-// Then instrument your MCP client and/or server:
+// Then instrument your MCP client and/or server before Connect:
 //
 //	client := mcp.NewClient(&mcp.Implementation{Name: "my-client"}, nil)
 //	tracemcp.InstrumentClient(client)
 //
 //	server := mcp.NewServer(&mcp.Implementation{Name: "my-server"}, nil)
 //	tracemcp.InstrumentServer(server)
+//
+// InstrumentClient traces ClientSession.CallTool and ClientSession.ListTools via
+// client middleware. InstrumentServer traces incoming tools/call (including the
+// registered tool handler) and tools/list.
 package tracemcp
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
@@ -35,8 +41,11 @@ import (
 )
 
 const (
-	methodCallTool  = "tools/call"
-	methodListTools = "tools/list"
+	methodCallTool            = "tools/call"
+	methodListTools           = "tools/list"
+	methodProgress            = "notifications/progress"
+	clientSessionCallToolAPI  = "ClientSession.CallTool"
+	clientSessionListToolsAPI = "ClientSession.ListTools"
 )
 
 type side int
@@ -46,51 +55,131 @@ const (
 	sideServer
 )
 
-type config struct {
-	tracer trace.Tracer
+type progressKey struct {
+	sessionID string
+	token     string
 }
 
-// Option configures MCP tracing middleware.
-type Option func(*config)
-
-// WithTracerProvider sets a custom TracerProvider for MCP tracing.
-func WithTracerProvider(tp trace.TracerProvider) Option {
-	return func(cfg *config) {
-		cfg.tracer = tp.Tracer("braintrust")
-	}
+type activeCall struct {
+	span     trace.Span
+	progress []map[string]any
 }
 
-func newConfig(opts ...Option) *config {
-	cfg := &config{
-		tracer: otel.GetTracerProvider().Tracer("braintrust"),
+type callTracker struct {
+	mu    sync.Mutex
+	calls map[progressKey]*activeCall
+}
+
+func newCallTracker() *callTracker {
+	return &callTracker{calls: make(map[progressKey]*activeCall)}
+}
+
+func (t *callTracker) register(session mcp.Session, token any, span trace.Span) *activeCall {
+	key, ok := progressKeyFor(session, token)
+	if !ok {
+		return nil
 	}
-	for _, opt := range opts {
-		opt(cfg)
+	call := &activeCall{span: span}
+	t.mu.Lock()
+	t.calls[key] = call
+	t.mu.Unlock()
+	return call
+}
+
+func (t *callTracker) unregister(session mcp.Session, token any) {
+	key, ok := progressKeyFor(session, token)
+	if !ok {
+		return
 	}
-	return cfg
+	t.mu.Lock()
+	delete(t.calls, key)
+	t.mu.Unlock()
+}
+
+func (t *callTracker) record(session mcp.Session, params *mcp.ProgressNotificationParams) {
+	if params == nil {
+		return
+	}
+	key, ok := progressKeyFor(session, params.ProgressToken)
+	if !ok {
+		return
+	}
+	entry := map[string]any{
+		"progress": params.Progress,
+	}
+	if params.Total > 0 {
+		entry["total"] = params.Total
+	}
+	if params.Message != "" {
+		entry["message"] = params.Message
+	}
+
+	t.mu.Lock()
+	call := t.calls[key]
+	t.mu.Unlock()
+	if call == nil {
+		return
+	}
+
+	call.progress = append(call.progress, entry)
+	call.span.AddEvent("mcp.progress", trace.WithAttributes(
+		attribute.Float64("progress", params.Progress),
+		attribute.Float64("total", params.Total),
+		attribute.String("message", params.Message),
+	))
+}
+
+func progressKeyFor(session mcp.Session, token any) (progressKey, bool) {
+	if token == nil {
+		return progressKey{}, false
+	}
+	return progressKey{
+		sessionID: session.ID(),
+		token:     fmt.Sprint(token),
+	}, true
+}
+
+func progressToken(params mcp.Params) any {
+	switch p := params.(type) {
+	case *mcp.CallToolParams:
+		if p != nil {
+			return p.GetProgressToken()
+		}
+	case *mcp.CallToolParamsRaw:
+		if p != nil {
+			return p.GetProgressToken()
+		}
+	}
+	return nil
 }
 
 // InstrumentClient adds Braintrust tracing middleware to an MCP client.
-// It traces client-side ListTools and CallTool requests.
-func InstrumentClient(c *mcp.Client, opts ...Option) {
+// It traces ClientSession.CallTool and ClientSession.ListTools, including
+// in-flight progress notifications received during CallTool.
+func InstrumentClient(c *mcp.Client) {
 	if c == nil {
 		return
 	}
-	cfg := newConfig(opts...)
-	c.AddSendingMiddleware(tracingMiddleware(cfg, sideClient))
+	tracker := newCallTracker()
+	tracer := otel.GetTracerProvider().Tracer("braintrust")
+	c.AddSendingMiddleware(tracingMiddleware(tracer, tracker, sideClient))
+	c.AddReceivingMiddleware(progressMiddleware(tracer, tracker, sideClient))
 }
 
 // InstrumentServer adds Braintrust tracing middleware to an MCP server.
-// It traces server-side tools/list and tools/call handling, including tool handlers.
-func InstrumentServer(s *mcp.Server, opts ...Option) {
+// It traces tools/list and tools/call, including the registered tool handler
+// and progress notifications emitted while a tool runs.
+func InstrumentServer(s *mcp.Server) {
 	if s == nil {
 		return
 	}
-	cfg := newConfig(opts...)
-	s.AddReceivingMiddleware(tracingMiddleware(cfg, sideServer))
+	tracker := newCallTracker()
+	tracer := otel.GetTracerProvider().Tracer("braintrust")
+	s.AddReceivingMiddleware(tracingMiddleware(tracer, tracker, sideServer))
+	s.AddSendingMiddleware(progressMiddleware(tracer, tracker, sideServer))
 }
 
-func tracingMiddleware(cfg *config, from side) mcp.Middleware {
+func tracingMiddleware(tracer trace.Tracer, tracker *callTracker, from side) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			switch method {
@@ -99,18 +188,28 @@ func tracingMiddleware(cfg *config, from side) mcp.Middleware {
 				return next(ctx, method, req)
 			}
 
+			if from == sideServer && method == methodCallTool {
+				return traceServerCallTool(ctx, tracer, tracker, next, req)
+			}
+
 			spanName := spanName(method, req)
 			spanKind := trace.SpanKindClient
 			if from == sideServer {
 				spanKind = trace.SpanKindInternal
 			}
 
-			ctx, span := cfg.tracer.Start(ctx, spanName, trace.WithSpanKind(spanKind))
+			ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(spanKind))
 			defer span.End()
 
 			setSpanType(span, method)
 			setMetadata(span, method, req, from)
 			setInput(span, method, req)
+
+			var active *activeCall
+			if method == methodCallTool {
+				active = tracker.register(req.GetSession(), progressToken(req.GetParams()), span)
+				defer tracker.unregister(req.GetSession(), progressToken(req.GetParams()))
+			}
 
 			result, err := next(ctx, method, req)
 			if err != nil {
@@ -120,7 +219,78 @@ func tracingMiddleware(cfg *config, from side) mcp.Middleware {
 			}
 
 			setOutput(span, method, result)
+			if active != nil && len(active.progress) > 0 {
+				appendProgressOutput(span, active.progress, result)
+			}
 			return result, err
+		}
+	}
+}
+
+func traceServerCallTool(
+	ctx context.Context,
+	tracer trace.Tracer,
+	tracker *callTracker,
+	next mcp.MethodHandler,
+	req mcp.Request,
+) (mcp.Result, error) {
+	toolName := callToolName(req.GetParams())
+	rpcName := "mcp.tools.call"
+	if toolName != "" {
+		rpcName = fmt.Sprintf("mcp.tools.call [%s]", toolName)
+	}
+	handlerName := "mcp.tools.handler"
+	if toolName != "" {
+		handlerName = fmt.Sprintf("mcp.tools.handler [%s]", toolName)
+	}
+
+	ctx, rpcSpan := tracer.Start(ctx, rpcName, trace.WithSpanKind(trace.SpanKindServer))
+	defer rpcSpan.End()
+
+	ctx, handlerSpan := tracer.Start(ctx, handlerName, trace.WithSpanKind(trace.SpanKindInternal))
+	defer handlerSpan.End()
+
+	setSpanType(handlerSpan, methodCallTool)
+	setMetadata(rpcSpan, methodCallTool, req, sideServer)
+	setMetadata(handlerSpan, methodCallTool, req, sideServer)
+	setInput(handlerSpan, methodCallTool, req)
+
+	token := progressToken(req.GetParams())
+	active := tracker.register(req.GetSession(), token, handlerSpan)
+	defer tracker.unregister(req.GetSession(), token)
+
+	result, err := next(ctx, methodCallTool, req)
+	if err != nil {
+		handlerSpan.RecordError(err)
+		handlerSpan.SetStatus(codes.Error, err.Error())
+		rpcSpan.RecordError(err)
+		rpcSpan.SetStatus(codes.Error, err.Error())
+		return result, err
+	}
+
+	setOutput(handlerSpan, methodCallTool, result)
+	if active != nil && len(active.progress) > 0 {
+		appendProgressOutput(handlerSpan, active.progress, result)
+	}
+	return result, err
+}
+
+func progressMiddleware(_ trace.Tracer, tracker *callTracker, from side) mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodProgress {
+				return next(ctx, method, req)
+			}
+			params, ok := req.GetParams().(*mcp.ProgressNotificationParams)
+			if ok && params != nil {
+				switch from {
+				case sideClient:
+					tracker.record(req.GetSession(), params)
+				case sideServer:
+					tracker.record(req.GetSession(), params)
+				}
+			}
+			return next(ctx, method, req)
 		}
 	}
 }
@@ -156,11 +326,14 @@ func setMetadata(span trace.Span, method string, req mcp.Request, from side) {
 	}
 	if from == sideClient {
 		metadata["role"] = "client"
+		if method == methodCallTool {
+			metadata["api"] = clientSessionCallToolAPI
+		}
+		if method == methodListTools {
+			metadata["api"] = clientSessionListToolsAPI
+		}
 	} else {
 		metadata["role"] = "server"
-	}
-	if sessionID := req.GetSession().ID(); sessionID != "" {
-		metadata["session_id"] = sessionID
 	}
 	if method == methodCallTool {
 		if name := callToolName(req.GetParams()); name != "" {
@@ -204,6 +377,18 @@ func setOutput(span trace.Span, method string, result mcp.Result) {
 		}
 		_ = internal.SetJSONAttr(span, "braintrust.output_json", listToolsOutput(res))
 	}
+}
+
+func appendProgressOutput(span trace.Span, progress []map[string]any, result mcp.Result) {
+	output := map[string]any{"progress": progress}
+	if res, ok := result.(*mcp.CallToolResult); ok {
+		if toolOutput := callToolOutput(res); toolOutput != nil {
+			for k, v := range toolOutput {
+				output[k] = v
+			}
+		}
+	}
+	_ = internal.SetJSONAttr(span, "braintrust.output_json", output)
 }
 
 func callToolName(params mcp.Params) string {
