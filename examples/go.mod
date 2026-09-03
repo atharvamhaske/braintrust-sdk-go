@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.4
 	github.com/braintrustdata/braintrust-sdk-go v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic v0.12.0
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai v0.0.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai v0.12.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit v0.12.0
@@ -126,5 +127,6 @@ require (
 
 replace (
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk => ../trace/contrib/adk
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/assemblyai => ../trace/contrib/assemblyai
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo => ../trace/contrib/langchaingo
 )
