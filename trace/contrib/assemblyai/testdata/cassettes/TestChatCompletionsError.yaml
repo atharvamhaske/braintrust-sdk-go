@@ -1,0 +1,63 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 79
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"messages":[{"content":"hi","role":"user"}],"model":"bogus-nonexistent-model"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://llm-gateway.assemblyai.com/v1/chat/completions
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 139
+        uncompressed: false
+        body: '{"metadata":{"errors":["model not found"]},"request_id":"7710ac42-c48d-4395-ad1e-f5c5291cd779","message":"invalid request body","code":400}'
+        headers:
+            Content-Length:
+                - "139"
+            Content-Type:
+                - application/json
+            Date:
+                - Thu, 03 Sep 2026 15:10:19 GMT
+            Set-Cookie:
+                - AWSALBTG=Sffg/BLMYedvtHMkeauS4XWtq505zoK594RxyTHYYLUSs9fb+FxrbVzRZEVQMWDFCF0HAUEsjEYJiuhHhn+zHoqa6ounxlHYU6jhRbNE5ZpW9bENKQiZkhzJsXX8xiq3jl3grTdShLLxOblJpxHFPSpu+YK9ntdGy8k59uQkaQyP; Expires=Thu, 10 Sep 2026 15:10:19 GMT; Path=/
+                - AWSALBTGCORS=Sffg/BLMYedvtHMkeauS4XWtq505zoK594RxyTHYYLUSs9fb+FxrbVzRZEVQMWDFCF0HAUEsjEYJiuhHhn+zHoqa6ounxlHYU6jhRbNE5ZpW9bENKQiZkhzJsXX8xiq3jl3grTdShLLxOblJpxHFPSpu+YK9ntdGy8k59uQkaQyP; Expires=Thu, 10 Sep 2026 15:10:19 GMT; Path=/; SameSite=None; Secure
+            X-Request-Id:
+                - 7710ac42-c48d-4395-ad1e-f5c5291cd779
+        status: 400 Bad Request
+        code: 400
+        duration: 972.617833ms

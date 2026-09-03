@@ -9,7 +9,6 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/braintrustdata/braintrust-sdk-go/internal/oteltest"
 	"github.com/braintrustdata/braintrust-sdk-go/internal/vcr"
@@ -90,32 +89,33 @@ func TestChatCompletions(t *testing.T) {
 	assert.GreaterOrEqual(t, metrics["time_to_first_token"], float64(0))
 }
 
-// TestChatCompletionsError verifies error handling: an unrecognized role is
-// rejected by the upstream provider with a real HTTP 400 - confirmed live
-// that LLM Gateway surfaces this via HTTP status, not just an embedded
-// llm_status_code, so internal.Middleware()'s generic error handling applies
-// the same as every other integration.
+// TestChatCompletionsError verifies error handling with an unrecognized
+// model name - confirmed live (twice) that LLM Gateway rejects this with a
+// real HTTP 400 ("model not found"). The span's status is NOT expected to be
+// codes.Error here: internal.Middleware()'s RoundTripper only sees a Go
+// error for genuine transport failures, never for HTTP 4xx/5xx responses
+// (status-code -> error conversion happens one layer up, inside openai-go
+// itself). This matches the established precedent in this pattern family -
+// see TestErrorHandling in trace/contrib/github.com/sashabaranov/go-openai,
+// which triggers a real HTTP 401 via VCR and asserts span name/metadata but
+// deliberately not span status. Only a genuine transport-level failure (as
+// in trace/contrib/openai's TestError, which injects a fake Go error via a
+// middleware) would exercise the codes.Error branch.
 func TestChatCompletionsError(t *testing.T) {
 	client, exporter := setUpTest(t)
 
 	_, err := client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-		Model: testModel,
+		Model: "bogus-nonexistent-model",
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("hi"),
 		},
-		MaxTokens: openai.Int(999999999),
-	})
-	require.NoError(t, err) // absurd max_tokens is silently accepted, not an error
-
-	exporter.FlushOne()
-
-	_, err = client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
-		Model:    testModel,
-		Messages: []openai.ChatCompletionMessageParamUnion{},
 	})
 	require.Error(t, err)
 
 	span := exporter.FlushOne()
 	span.AssertNameIs("assemblyai.chat_completions")
-	assert.Equal(t, codes.Error, span.Stub.Status.Code)
+
+	metadata := span.Metadata()
+	assert.Equal(t, "assemblyai", metadata["provider"])
+	assert.Equal(t, "bogus-nonexistent-model", metadata["model"])
 }

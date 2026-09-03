@@ -1,0 +1,73 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 138
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"messages":[{"content":"What is the capital of France? Reply in one word.","role":"user"}],"model":"qwen3.5-4b-32k-fast","max_tokens":50}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://llm-gateway.assemblyai.com/v1/chat/completions
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 629
+        uncompressed: false
+        body: '{"request":{"model":"qwen3.5-4b-32k-fast","max_tokens":50},"request_id":"fcd936bb-3bbb-4c8d-b755-b34e1179d9d7","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"Paris"}}],"usage":{"input_tokens":24,"prompt_tokens":24,"output_tokens":2,"completion_tokens":2,"total_tokens":26,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0}},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}},"response_time":47234889,"llm_status_code":200}'
+        headers:
+            Content-Length:
+                - "629"
+            Content-Type:
+                - application/json
+            Date:
+                - Thu, 03 Sep 2026 15:01:18 GMT
+            Set-Cookie:
+                - AWSALBTG=ivHFoGBN1tEd/LLDpWqwCxB7+v7YoPR6oFq58X+h0IK7KMx+5eI1gH1L2RwjesOl+phZUm0Qstnu5zfbKo7zQX3A3zWvgY/YrEgXSsM29y+Jc13XydMnJRr3h9FuQDR0X2ZiPovY5RvrtUB/BYzWTjLWDCiOmKBx0p45q2NS9Syg; Expires=Thu, 10 Sep 2026 15:01:18 GMT; Path=/
+                - AWSALBTGCORS=ivHFoGBN1tEd/LLDpWqwCxB7+v7YoPR6oFq58X+h0IK7KMx+5eI1gH1L2RwjesOl+phZUm0Qstnu5zfbKo7zQX3A3zWvgY/YrEgXSsM29y+Jc13XydMnJRr3h9FuQDR0X2ZiPovY5RvrtUB/BYzWTjLWDCiOmKBx0p45q2NS9Syg; Expires=Thu, 10 Sep 2026 15:01:18 GMT; Path=/; SameSite=None; Secure
+            X-Ratelimit-Limit:
+                - "2"
+            X-Ratelimit-Model:
+                - qwen3.5-4b-32k-fast
+            X-Ratelimit-Remaining:
+                - "1"
+            X-Ratelimit-Reset:
+                - "60"
+            X-Ratelimit-Service:
+                - llmgw
+            X-Request-Id:
+                - fcd936bb-3bbb-4c8d-b755-b34e1179d9d7
+        status: 200 OK
+        code: 200
+        duration: 1.367146917s
