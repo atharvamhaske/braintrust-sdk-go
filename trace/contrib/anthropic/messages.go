@@ -59,6 +59,7 @@ func (mt *messagesTracer) StartSpan(ctx context.Context, t time.Time, request io
 		"mcp_servers",
 		"service_tier",
 		"thinking",
+		"context_management",
 	}
 
 	// handle simple fields here.
@@ -198,6 +199,16 @@ func (mt *messagesTracer) handleMessageResponse(span trace.Span, rawMsg map[stri
 	// Update model if present in response (in case it was resolved from "latest").
 	if model, ok := rawMsg["model"].(string); ok {
 		mt.metadata["model"] = model
+	}
+
+	// context_management.applied_edits reports which context-editing strategies
+	// actually fired (e.g. clear_tool_uses_20250919, clear_thinking_20251015) and
+	// how much they cleared - operational detail the request-side config alone
+	// doesn't show, and that affects visible conversation state and cache hits.
+	if contextManagement, ok := rawMsg["context_management"].(map[string]any); ok {
+		if appliedEdits, exists := contextManagement["applied_edits"]; exists {
+			mt.metadata["context_management_applied_edits"] = appliedEdits
+		}
 	}
 
 	if err := internal.SetJSONAttr(span, "braintrust.metadata", mt.metadata); err != nil {

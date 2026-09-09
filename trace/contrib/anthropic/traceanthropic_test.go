@@ -326,6 +326,65 @@ func TestMessagesTracerCapturesRequestMetadata(t *testing.T) {
 	}, metadata)
 }
 
+func TestMessagesTracerCapturesContextManagement(t *testing.T) {
+	tp, exporter := oteltest.Setup(t)
+	tracer := newMessagesTracer(&middlewareConfig{tracerProvider: tp})
+
+	_, span, err := tracer.StartSpan(t.Context(), time.Now(), strings.NewReader(`{
+		"model":"claude-opus-5",
+		"max_tokens":128,
+		"messages":[{"role":"user","content":"Hello"}],
+		"context_management":{
+			"edits":[
+				{"type":"clear_tool_uses_20250919","trigger":{"type":"input_tokens","value":30000},"keep":{"type":"tool_uses","value":3}},
+				{"type":"clear_thinking_20251015","keep":{"type":"thinking_turns","value":1}}
+			]
+		}
+	}`))
+	require.NoError(t, err)
+	require.NoError(t, tracer.TagSpan(span, strings.NewReader(`{
+		"role":"assistant",
+		"content":[{"type":"text","text":"done"}],
+		"model":"claude-opus-5",
+		"stop_reason":"end_turn",
+		"usage":{"input_tokens":10,"output_tokens":5},
+		"context_management":{
+			"applied_edits":[
+				{"type":"clear_tool_uses_20250919","cleared_tool_uses":4,"cleared_input_tokens":18000},
+				{"type":"clear_thinking_20251015","cleared_thinking_turns":2}
+			]
+		}
+	}`)))
+	span.End()
+
+	exported := exporter.FlushOne()
+	metadata := exported.Metadata()
+	assert.Equal(t, map[string]any{
+		"edits": []any{
+			map[string]any{
+				"type":    "clear_tool_uses_20250919",
+				"trigger": map[string]any{"type": "input_tokens", "value": float64(30000)},
+				"keep":    map[string]any{"type": "tool_uses", "value": float64(3)},
+			},
+			map[string]any{
+				"type": "clear_thinking_20251015",
+				"keep": map[string]any{"type": "thinking_turns", "value": float64(1)},
+			},
+		},
+	}, metadata["context_management"])
+	assert.Equal(t, []any{
+		map[string]any{
+			"type":                 "clear_tool_uses_20250919",
+			"cleared_tool_uses":    float64(4),
+			"cleared_input_tokens": float64(18000),
+		},
+		map[string]any{
+			"type":                   "clear_thinking_20251015",
+			"cleared_thinking_turns": float64(2),
+		},
+	}, metadata["context_management_applied_edits"])
+}
+
 func TestMessagesTracerCapturesNativeResponse(t *testing.T) {
 	tp, exporter := oteltest.Setup(t)
 	tracer := newMessagesTracer(&middlewareConfig{tracerProvider: tp})
