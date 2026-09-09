@@ -371,18 +371,18 @@ func TestMessagesTracerCapturesContextManagement(t *testing.T) {
 				"keep": map[string]any{"type": "thinking_turns", "value": float64(1)},
 			},
 		},
+		"applied_edits": []any{
+			map[string]any{
+				"type":                 "clear_tool_uses_20250919",
+				"cleared_tool_uses":    float64(4),
+				"cleared_input_tokens": float64(18000),
+			},
+			map[string]any{
+				"type":                   "clear_thinking_20251015",
+				"cleared_thinking_turns": float64(2),
+			},
+		},
 	}, metadata["context_management"])
-	assert.Equal(t, []any{
-		map[string]any{
-			"type":                 "clear_tool_uses_20250919",
-			"cleared_tool_uses":    float64(4),
-			"cleared_input_tokens": float64(18000),
-		},
-		map[string]any{
-			"type":                   "clear_thinking_20251015",
-			"cleared_thinking_turns": float64(2),
-		},
-	}, metadata["context_management_applied_edits"])
 }
 
 func TestMessagesTracerCapturesNativeResponse(t *testing.T) {

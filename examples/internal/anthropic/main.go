@@ -348,6 +348,41 @@ func (a *AnthropicBot) vision(ctx context.Context) error {
 	return nil
 }
 
+// contextManagement demonstrates Claude's server-side context-editing feature,
+// which clears stale tool-use results as a conversation grows. Requires the
+// beta client and the context-management-2025-06-27 beta header.
+func (a *AnthropicBot) contextManagement(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "context-management")
+	defer span.End()
+
+	fmt.Println("\n=== Example 7: Context Management ===")
+
+	msg, err := a.client.Beta.Messages.New(ctx, anthropic.BetaMessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 1024,
+		Betas:     []anthropic.AnthropicBeta{"context-management-2025-06-27"},
+		ContextManagement: anthropic.BetaContextManagementConfigParam{
+			Edits: []anthropic.BetaContextManagementConfigEditUnionParam{
+				{OfClearToolUses20250919: &anthropic.BetaClearToolUses20250919EditParam{}},
+			},
+		},
+		Messages: []anthropic.BetaMessageParam{
+			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("What is the capital of France?")),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("context management error: %v", err)
+	}
+
+	for _, content := range msg.Content {
+		if content.Type == "text" {
+			fmt.Printf("  %s\n", content.Text)
+		}
+	}
+	fmt.Printf("  applied edits: %d\n", len(msg.ContextManagement.AppliedEdits))
+	return nil
+}
+
 func main() {
 	fmt.Println("Braintrust Anthropic Tracing Examples")
 	fmt.Println("======================================")
@@ -413,6 +448,10 @@ func main() {
 	}
 
 	if err := bot.vision(ctx); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	if err := bot.contextManagement(ctx); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 

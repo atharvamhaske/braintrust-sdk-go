@@ -205,9 +205,16 @@ func (mt *messagesTracer) handleMessageResponse(span trace.Span, rawMsg map[stri
 	// actually fired (e.g. clear_tool_uses_20250919, clear_thinking_20251015) and
 	// how much they cleared - operational detail the request-side config alone
 	// doesn't show, and that affects visible conversation state and cache hits.
-	if contextManagement, ok := rawMsg["context_management"].(map[string]any); ok {
-		if appliedEdits, exists := contextManagement["applied_edits"]; exists {
-			mt.metadata["context_management_applied_edits"] = appliedEdits
+	// Nested under the same "context_management" metadata key as the request-side
+	// config so both live under one key.
+	if responseContextManagement, ok := rawMsg["context_management"].(map[string]any); ok {
+		if appliedEdits, exists := responseContextManagement["applied_edits"]; exists {
+			contextManagement, _ := mt.metadata["context_management"].(map[string]any)
+			if contextManagement == nil {
+				contextManagement = make(map[string]any)
+			}
+			contextManagement["applied_edits"] = appliedEdits
+			mt.metadata["context_management"] = contextManagement
 		}
 	}
 
