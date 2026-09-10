@@ -53,6 +53,8 @@ func (rt *responsesTracer) StartSpan(ctx context.Context, t time.Time, request i
 		"model",
 		"instructions",
 		"user",
+		"prompt_cache_key",
+		"safety_identifier",
 		"truncation",
 		"service_tier",
 		"temperature",

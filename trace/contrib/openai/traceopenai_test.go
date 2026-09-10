@@ -192,6 +192,34 @@ func TestOpenAIResponsesKitchenSink(t *testing.T) {
 	assert.Equal("text", formatMap["type"], "default text format type should be 'text'")
 }
 
+func TestOpenAIResponsesPromptCacheAndSafetyFields(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	prompt := responses.ResponseNewParamsInputUnion{OfString: openai.String("what is 13+4?")}
+
+	params := responses.ResponseNewParams{
+		Input:            prompt,
+		Model:            testModel,
+		PromptCacheKey:   openai.String("conversation-123"),
+		SafetyIdentifier: openai.String("user-456"),
+	}
+
+	timer := oteltest.NewTimer()
+	resp, err := client.Responses.New(context.Background(), params)
+	timeRange := timer.Tick()
+	require.NoError(err)
+	require.NotNil(resp)
+
+	ts := exporter.FlushOne()
+	assertSpanValid(t, ts, timeRange)
+
+	metadata := ts.Metadata()
+	assert.Equal("conversation-123", metadata["prompt_cache_key"], "prompt_cache_key should be captured in metadata")
+	assert.Equal("user-456", metadata["safety_identifier"], "safety_identifier should be captured in metadata")
+}
+
 func TestOpenAIResponsesStreamingClose(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	require := require.New(t)
