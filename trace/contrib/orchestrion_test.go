@@ -52,6 +52,7 @@ func TestOrchestrionInjection(t *testing.T) {
 				"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit",
 				"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/github.com/sashabaranov/go-openai",
 				"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo",
+				"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/mcp",
 				"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/openai",
 			},
 		},
