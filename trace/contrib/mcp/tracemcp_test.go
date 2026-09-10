@@ -180,6 +180,34 @@ func TestInstrumentServer_CallTool(t *testing.T) {
 	assert.Equal(t, oteltrace.SpanKindServer, rpcSpan.Stub.SpanKind)
 }
 
+func TestTraceContextPropagatesAcrossTransport(t *testing.T) {
+	exporter := setupOtel(t)
+	session, cleanup := setupInMemorySession(t, true, true)
+	defer cleanup()
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "greet",
+		Arguments: greetArgs{Name: "trace"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	spans := exporter.Flush()
+
+	clientSpan := findSpanWithMetadata(spans, "mcp.tools.call [greet]", "client")
+	require.NotNil(t, clientSpan)
+	rpcSpan := findSpanWithMetadata(spans, "mcp.tools.call [greet]", "server")
+	require.NotNil(t, rpcSpan)
+	handlerSpan := findSpanNamed(spans, "mcp.tools.handler [greet]")
+	require.NotNil(t, handlerSpan)
+
+	traceID := clientSpan.Stub.SpanContext.TraceID()
+	assert.Equal(t, traceID, rpcSpan.Stub.SpanContext.TraceID(), "server RPC span must share the client's trace")
+	assert.Equal(t, traceID, handlerSpan.Stub.SpanContext.TraceID(), "handler span must share the client's trace")
+	assert.Equal(t, clientSpan.Stub.SpanContext.SpanID(), rpcSpan.Stub.Parent.SpanID(),
+		"server RPC span must be a child of the client's call span")
+}
+
 func TestInstrumentClient_CallToolProgress(t *testing.T) {
 	exporter := setupOtel(t)
 	session, cleanup := setupInMemorySession(t, true, true)

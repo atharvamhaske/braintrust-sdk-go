@@ -35,6 +35,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/braintrustdata/braintrust-sdk-go/trace/internal"
@@ -153,6 +154,50 @@ func progressToken(params mcp.Params) any {
 	return nil
 }
 
+// metaCarrier adapts an MCP request's _meta map to a propagation.TextMapCarrier,
+// so trace context can travel alongside the JSON-RPC request across the
+// client/server transport boundary.
+type metaCarrier map[string]any
+
+func (c metaCarrier) Get(key string) string {
+	s, _ := c[key].(string)
+	return s
+}
+
+func (c metaCarrier) Set(key, value string) {
+	c[key] = value
+}
+
+func (c metaCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// mcpPropagator is used instead of the global otel.GetTextMapPropagator(),
+// which defaults to a no-op unless the application explicitly configures one
+// (typically for HTTP). MCP trace propagation must work regardless of that.
+var mcpPropagator = propagation.TraceContext{}
+
+// injectTraceContext propagates the span context from ctx into the request's
+// _meta field, so the receiving side can continue the same trace.
+func injectTraceContext(ctx context.Context, params mcp.Params) {
+	meta := params.GetMeta()
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	mcpPropagator.Inject(ctx, metaCarrier(meta))
+	params.SetMeta(meta)
+}
+
+// extractTraceContext returns a context carrying the parent span context
+// found in the request's _meta field, if any.
+func extractTraceContext(ctx context.Context, params mcp.Params) context.Context {
+	return mcpPropagator.Extract(ctx, metaCarrier(params.GetMeta()))
+}
+
 // InstrumentClient adds Braintrust tracing middleware to an MCP client.
 // It traces ClientSession.CallTool and ClientSession.ListTools, including
 // in-flight progress notifications received during CallTool.
@@ -192,6 +237,10 @@ func tracingMiddleware(tracer trace.Tracer, tracker *callTracker, from side) mcp
 				return traceServerCallTool(ctx, tracer, tracker, next, req)
 			}
 
+			if from == sideServer {
+				ctx = extractTraceContext(ctx, req.GetParams())
+			}
+
 			spanName := spanName(method, req)
 			spanKind := trace.SpanKindClient
 			if from == sideServer {
@@ -200,6 +249,10 @@ func tracingMiddleware(tracer trace.Tracer, tracker *callTracker, from side) mcp
 
 			ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(spanKind))
 			defer span.End()
+
+			if from == sideClient {
+				injectTraceContext(ctx, req.GetParams())
+			}
 
 			setSpanType(span, method)
 			setMetadata(span, method, req, from)
@@ -243,6 +296,8 @@ func traceServerCallTool(
 	if toolName != "" {
 		handlerName = fmt.Sprintf("mcp.tools.handler [%s]", toolName)
 	}
+
+	ctx = extractTraceContext(ctx, req.GetParams())
 
 	ctx, rpcSpan := tracer.Start(ctx, rpcName, trace.WithSpanKind(trace.SpanKindServer))
 	defer rpcSpan.End()
