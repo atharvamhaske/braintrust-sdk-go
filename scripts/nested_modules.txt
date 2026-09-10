@@ -1,4 +1,5 @@
 # Releasable nested Go modules. One repo-relative path per line.
+trace/contrib/a2a
 trace/contrib/adk
 trace/contrib/anthropic
 trace/contrib/bedrockruntime
