@@ -1204,3 +1204,33 @@ func TestChatCompletionsReasoningParams(t *testing.T) {
 	// Verify reasoning_effort is captured
 	assert.Equal("low", metadata["reasoning_effort"], "reasoning_effort should be captured in metadata")
 }
+
+func TestChatCompletionsPromptCacheAndSafetyFields(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("What is the capital of France?"),
+		},
+		Model:            testModel,
+		PromptCacheKey:   openai.String("conversation-123"),
+		SafetyIdentifier: openai.String("user-456"),
+	}
+
+	timer := oteltest.NewTimer()
+	resp, err := client.Chat.Completions.New(context.Background(), params)
+	timeRange := timer.Tick()
+	require.NoError(err)
+	require.NotNil(resp)
+
+	ts := exporter.FlushOne()
+
+	ts.AssertInTimeRange(timeRange)
+	ts.AssertNameIs("Chat Completion")
+
+	metadata := ts.Metadata()
+	assert.Equal("conversation-123", metadata["prompt_cache_key"], "prompt_cache_key should be captured in metadata")
+	assert.Equal("user-456", metadata["safety_identifier"], "safety_identifier should be captured in metadata")
+}
