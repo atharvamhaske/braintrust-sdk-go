@@ -175,6 +175,7 @@ func rewriteFixtureReplaceDirectives(t *testing.T, fixtureDir, repoRoot string) 
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit":                            filepath.Join(repoRoot, "trace", "contrib", "genkit"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/github.com/sashabaranov/go-openai": filepath.Join(repoRoot, "trace", "contrib", "github.com", "sashabaranov", "go-openai"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo":                       filepath.Join(repoRoot, "trace", "contrib", "langchaingo"),
+		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/mcp":                               filepath.Join(repoRoot, "trace", "contrib", "mcp"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/openai":                            filepath.Join(repoRoot, "trace", "contrib", "openai"),
 	}
 
