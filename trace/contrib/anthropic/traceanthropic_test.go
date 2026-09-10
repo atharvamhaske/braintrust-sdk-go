@@ -385,6 +385,56 @@ func TestMessagesTracerCapturesContextManagement(t *testing.T) {
 	}, metadata["context_management"])
 }
 
+func TestMessagesTracerCapturesContextManagementStreaming(t *testing.T) {
+	tp, exporter := oteltest.Setup(t)
+	tracer := newMessagesTracer(&middlewareConfig{tracerProvider: tp})
+
+	_, span, err := tracer.StartSpan(t.Context(), time.Now(), strings.NewReader(`{
+		"model":"claude-opus-5",
+		"max_tokens":128,
+		"messages":[{"role":"user","content":"Hello"}],
+		"stream":true,
+		"context_management":{
+			"edits":[
+				{"type":"clear_tool_uses_20250919","trigger":{"type":"input_tokens","value":30000},"keep":{"type":"tool_uses","value":3}}
+			]
+		}
+	}`))
+	require.NoError(t, err)
+
+	sseBody := `data: {"type":"message_start","message":{"model":"claude-opus-5","usage":{"input_tokens":10},"context_management":{"applied_edits":[{"type":"clear_tool_uses_20250919","cleared_tool_uses":4,"cleared_input_tokens":18000}]}}}
+
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}
+
+data: [DONE]
+`
+	require.NoError(t, tracer.TagSpan(span, strings.NewReader(sseBody)))
+	span.End()
+
+	exported := exporter.FlushOne()
+	metadata := exported.Metadata()
+	assert.Equal(t, map[string]any{
+		"edits": []any{
+			map[string]any{
+				"type":    "clear_tool_uses_20250919",
+				"trigger": map[string]any{"type": "input_tokens", "value": float64(30000)},
+				"keep":    map[string]any{"type": "tool_uses", "value": float64(3)},
+			},
+		},
+		"applied_edits": []any{
+			map[string]any{
+				"type":                 "clear_tool_uses_20250919",
+				"cleared_tool_uses":    float64(4),
+				"cleared_input_tokens": float64(18000),
+			},
+		},
+	}, metadata["context_management"])
+}
+
 func TestMessagesTracerCapturesNativeResponse(t *testing.T) {
 	tp, exporter := oteltest.Setup(t)
 	tracer := newMessagesTracer(&middlewareConfig{tracerProvider: tp})
