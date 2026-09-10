@@ -166,6 +166,7 @@ func rewriteFixtureReplaceDirectives(t *testing.T, fixtureDir, repoRoot string) 
 
 	replacements := map[string]string{
 		"github.com/braintrustdata/braintrust-sdk-go":                                                 repoRoot,
+		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a":                               filepath.Join(repoRoot, "trace", "contrib", "a2a"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk":                               filepath.Join(repoRoot, "trace", "contrib", "adk"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/all":                               filepath.Join(repoRoot, "trace", "contrib", "all"),
 		"github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic":                         filepath.Join(repoRoot, "trace", "contrib", "anthropic"),

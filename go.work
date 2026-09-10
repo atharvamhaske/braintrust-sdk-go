@@ -6,6 +6,7 @@ use (
 	.
 	./btx
 	./examples
+	./trace/contrib/a2a
 	./trace/contrib/adk
 	./trace/contrib/all
 	./trace/contrib/anthropic
