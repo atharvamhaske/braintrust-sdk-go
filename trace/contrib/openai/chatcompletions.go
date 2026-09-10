@@ -71,6 +71,8 @@ func (ct *chatCompletionsTracer) StartSpan(ctx context.Context, t time.Time, req
 		"tool_choice",
 		"parallel_tool_calls",
 		"user",
+		"prompt_cache_key",
+		"safety_identifier",
 		"functions",
 		"function_call",
 	}
