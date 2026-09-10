@@ -47,6 +47,7 @@ func main() {
 		{"responses-reasoning", responsesReasoning},
 		{"chat-reasoning", chatReasoning},
 		{"chat-completion", chatCompletion},
+		{"chat-cache-and-safety", chatCacheAndSafety},
 		{"chat-multi-turn", chatMultiTurn},
 		{"chat-streaming", chatStreaming},
 		{"chat-tools", chatTools},
@@ -119,6 +120,22 @@ func chatCompletion(ctx context.Context, client openai.Client) error {
 			openai.UserMessage("Say hello"),
 		},
 		Model: openai.ChatModelGPT4oMini,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  %s\n", resp.Choices[0].Message.Content)
+	return nil
+}
+
+func chatCacheAndSafety(ctx context.Context, client openai.Client) error {
+	resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Say hello"),
+		},
+		Model:            openai.ChatModelGPT4oMini,
+		PromptCacheKey:   openai.String("go-sdk-examples-conversation"),
+		SafetyIdentifier: openai.String("go-sdk-examples-user"),
 	})
 	if err != nil {
 		return err
@@ -244,8 +261,10 @@ func chatStreamingTools(ctx context.Context, client openai.Client) error {
 
 func responsesAPI(ctx context.Context, client openai.Client) error {
 	resp, err := client.Responses.New(ctx, responses.ResponseNewParams{
-		Input: responses.ResponseNewParamsInputUnion{OfString: openai.String("Recommend pizza in NYC")},
-		Model: openai.ChatModelGPT4,
+		Input:            responses.ResponseNewParamsInputUnion{OfString: openai.String("Recommend pizza in NYC")},
+		Model:            openai.ChatModelGPT4,
+		PromptCacheKey:   openai.String("go-sdk-examples-conversation"),
+		SafetyIdentifier: openai.String("go-sdk-examples-user"),
 	})
 	if err != nil {
 		return err
