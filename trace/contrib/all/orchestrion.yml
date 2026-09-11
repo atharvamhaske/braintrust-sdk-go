@@ -9,57 +9,29 @@ meta:
   name: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/all
   description: All Braintrust tracing integrations for LLM providers
 aspects:
-  - id: a2a-newfromcard-instrument
+  - id: a2a-client-instrument
     join-point:
-      function-call: github.com/a2aproject/a2a-go/a2aclient.NewFromCard
+      one-of:
+        - function-call: github.com/a2aproject/a2a-go/a2aclient.NewFromCard
+        - function-call: github.com/a2aproject/a2a-go/a2aclient.NewFromEndpoints
     advice:
-      - wrap-expression:
-          imports:
-            tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
-            a2aclient: github.com/a2aproject/a2a-go/a2aclient
-          template: |-
-            func() (*a2aclient.Client, error) {
-              __client, __err := a2aclient.NewFromCard({{ range $i, $arg := .AST.Args }}{{ if $i }}, {{ end }}{{ $arg }}{{ end }})
-              if __err != nil {
-                return nil, __err
-              }
-              tracea2a.InstrumentClient(__client)
-              return __client, nil
-            }()
-  - id: a2a-newfromendpoints-instrument
-    join-point:
-      function-call: github.com/a2aproject/a2a-go/a2aclient.NewFromEndpoints
-    advice:
-      - wrap-expression:
-          imports:
-            tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
-            a2aclient: github.com/a2aproject/a2a-go/a2aclient
-          template: |-
-            func() (*a2aclient.Client, error) {
-              __client, __err := a2aclient.NewFromEndpoints({{ range $i, $arg := .AST.Args }}{{ if $i }}, {{ end }}{{ $arg }}{{ end }})
-              if __err != nil {
-                return nil, __err
-              }
-              tracea2a.InstrumentClient(__client)
-              return __client, nil
-            }()
-  - id: a2a-newhandler-instrument
+      - append-args:
+          type: github.com/a2aproject/a2a-go/a2aclient.FactoryOption
+          values:
+            - imports:
+                tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
+                a2aclient: github.com/a2aproject/a2a-go/a2aclient
+              template: a2aclient.WithInterceptors(tracea2a.NewClientInterceptor())
+  - id: a2a-server-instrument
     join-point:
       function-call: github.com/a2aproject/a2a-go/a2asrv.NewHandler
     advice:
-      - wrap-expression:
-          imports:
-            tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
-            a2asrv: github.com/a2aproject/a2a-go/a2asrv
-          template: |-
-            func() a2asrv.RequestHandler {
-              {{- $executor := index .AST.Args 0 }}
-              __opts := []a2asrv.RequestHandlerOption{tracea2a.InstrumentServer()}
-              {{- range $i, $arg := .AST.Args }}{{ if gt $i 0 }}
-              __opts = append(__opts, {{ $arg }})
-              {{- end }}{{ end }}
-              return a2asrv.NewHandler({{ $executor }}, __opts...)
-            }()
+      - append-args:
+          type: github.com/a2aproject/a2a-go/a2asrv.RequestHandlerOption
+          values:
+            - imports:
+                tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
+              template: tracea2a.InstrumentServer()
   - id: adk-llmagent-config-struct
     join-point:
       struct-literal:
