@@ -21,9 +21,8 @@ import (
 	"github.com/braintrustdata/braintrust-sdk-go/internal/oteltest"
 )
 
-// A2A tests use a real local httptest server speaking JSON-RPC rather than
-// VCR: both the client and server are this SDK's own code, so there is no
-// external API to record a cassette against.
+// Tests use a real local httptest server speaking JSON-RPC rather than VCR:
+// both sides are this SDK's own code, so there's no external API to record.
 
 type echoExecutor struct{}
 
@@ -36,11 +35,8 @@ func (echoExecutor) Cancel(_ context.Context, _ *a2asrv.RequestContext, _ eventq
 	return nil
 }
 
-// multiEventExecutor emits two non-terminal TaskArtifactUpdateEvents, then a
-// final TaskStatusUpdateEvent - a real task-based stream shape, unlike
-// echoExecutor's single terminal Message. The final status event carries no
-// artifact content of its own, so a correct implementation must accumulate
-// the artifacts rather than overwrite output with just the last event.
+// multiEventExecutor emits two artifact events then a final status event -
+// a real task-based stream, unlike echoExecutor's single terminal Message.
 type multiEventExecutor struct{}
 
 func (multiEventExecutor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext, q eventqueue.Queue) error {
@@ -126,11 +122,6 @@ func TestInstrumentClient_SendMessage(t *testing.T) {
 	serverSpan := findSpanWithRole(t, spans, "a2a.OnSendMessage", "server")
 	require.Equal(t, "server", serverSpan.Metadata()["role"])
 
-	// The client and server run over a real HTTP wire (JSON-RPC), so without
-	// explicit propagation the server span would start a brand new,
-	// unrelated trace instead of continuing the client's - this asserts the
-	// traceparent injected into CallMeta (client) and extracted from
-	// RequestMeta (server) actually links them into one trace.
 	require.Equal(t, clientSpan.Stub.SpanContext.TraceID(), serverSpan.Stub.SpanContext.TraceID(),
 		"client and server spans must share one trace")
 	require.Equal(t, clientSpan.Stub.SpanContext.SpanID(), serverSpan.Stub.Parent.SpanID(),
@@ -152,30 +143,18 @@ func TestInstrumentClient_SendStreamingMessage(t *testing.T) {
 	}
 	require.True(t, gotFinal, "should have received at least one event")
 
-	// The span must be ended (exported) even though echoExecutor's reply is a
-	// single terminal Message rather than a TaskStatusUpdateEvent - this is
-	// the case the isTerminalEvent fix covers.
 	spans := exporter.Flush()
 	clientSpan := findSpanWithRole(t, spans, "a2a.SendStreamingMessage", "client")
 	require.Contains(t, clientSpan.Attr("braintrust.output_json").String(), "hi Braintrust")
 }
 
-// TestInstrumentClient_SendStreamingMessage_MultiEvent proves two things
-// TestInstrumentClient_SendStreamingMessage's single-event case cannot:
-//  1. Non-terminal events do not end the span early - no span is exported
-//     until the terminal TaskStatusUpdateEvent arrives.
-//  2. The output reflects every event's content, not just the last one - the
-//     final status event alone carries no artifact text.
+// Proves non-terminal events don't end the span early, and output
+// accumulates every event's content instead of just the last one.
 func TestInstrumentClient_SendStreamingMessage_MultiEvent(t *testing.T) {
 	exporter := setupOtel(t)
 	server := setupServerWithExecutor(t, multiEventExecutor{})
 	client := setupClient(t, server.URL)
 
-	// The SDK calls the interceptor's After hook for an event before handing
-	// that event to this loop's body (client.go's SendStreamingMessage calls
-	// interceptAfter, then yield). So checking exporter state inside the loop,
-	// right after receiving a non-terminal event, correctly reflects whether
-	// that event's After call exported a span - it must not have.
 	var eventCount int
 	for event, err := range client.SendStreamingMessage(context.Background(), &a2a.MessageSendParams{
 		Message: a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: "go"}),
@@ -227,9 +206,6 @@ func TestInstrumentServer_TracesErrors(t *testing.T) {
 	assert.NotEmpty(t, recordedErr, "exception.message must be recorded on the span")
 }
 
-// TestInstrumentClient_Idempotent proves calling InstrumentClient twice on
-// the same client attaches only one interceptor's worth of tracing per call -
-// the ownership check in startCall makes any redundant attachment a no-op.
 func TestInstrumentClient_Idempotent(t *testing.T) {
 	exporter := setupOtel(t)
 	server := setupServer(t)
@@ -251,14 +227,9 @@ func TestInstrumentClient_Idempotent(t *testing.T) {
 	assert.Equal(t, 1, clientSpans, "double InstrumentClient must not attach a duplicate interceptor")
 }
 
-// countingTracerProvider wraps a TracerProvider to count every Tracer.Start
-// call, independent of whether the resulting span is ever ended/exported.
-// This catches a narrower bug than counting exported spans: if the ownership
-// check in startCall's early-return were missing, a second attached
-// interceptor's Before would still call tr.Start() and create a real span -
-// it just wouldn't be the one an After call ends, so it silently leaks
-// without ever reaching the exporter. Counting exported spans alone can't
-// see that leak; counting Start calls can.
+// countingTracerProvider counts every Tracer.Start call, catching an
+// orphaned span (created but never ended) that exported-span counting alone
+// would miss.
 type countingTracerProvider struct {
 	trace.TracerProvider
 	starts *atomic.Int64
@@ -278,14 +249,8 @@ func (t *countingTracer) Start(ctx context.Context, name string, opts ...trace.S
 	return t.Tracer.Start(ctx, name, opts...)
 }
 
-// TestDoubleInstrumentation_TwoInterceptorInstances simulates the scenario
-// the package doc warns about: Orchestrion attaching one interceptor
-// instance to a client while a manual InstrumentClient call attaches a
-// second, independently-created one. This is a stronger check than
-// TestInstrumentClient_Idempotent, which only covers calling the same
-// InstrumentClient function twice - here the two interceptors are genuinely
-// different objects, exactly like Orchestrion's own NewClientInterceptor()
-// call combined with a manual InstrumentClient call would produce.
+// Simulates Orchestrion and a manual InstrumentClient call each attaching
+// their own interceptor instance to the same client.
 func TestDoubleInstrumentation_TwoInterceptorInstances(t *testing.T) {
 	tp, exporter := oteltest.Setup(t)
 	var starts atomic.Int64
@@ -318,17 +283,11 @@ func TestDoubleInstrumentation_TwoInterceptorInstances(t *testing.T) {
 	}
 	assert.Equal(t, 1, clientSpans, "two independently attached interceptors must still produce exactly one exported span")
 
-	// The server side also gets a real request through the same client call,
-	// so subtract its one Start to isolate the client-side count.
+	// 1 client span + 1 server span; a redundant interceptor must not call Start.
 	assert.Equal(t, int64(2), starts.Load(),
 		"exactly one client-side span and one server-side span must be started - a second client interceptor must not call Start at all, not just fail to export")
 }
 
-// TestInstrumentClient_StreamAbandonedOnContextCancel proves the
-// context.AfterFunc fallback in startCall: if a caller cancels a streaming
-// call's context after receiving a non-terminal event and before a terminal
-// one arrives, the span still ends (marked as abandoned) instead of leaking
-// forever - closing the gap the package doc previously only documented.
 func TestInstrumentClient_StreamAbandonedOnContextCancel(t *testing.T) {
 	exporter := setupOtel(t)
 	server := setupServerWithExecutor(t, multiEventExecutor{})
@@ -348,8 +307,6 @@ func TestInstrumentClient_StreamAbandonedOnContextCancel(t *testing.T) {
 	}
 	require.True(t, gotFirstEvent)
 
-	// context.AfterFunc runs its callback in its own goroutine, so the span
-	// may not be ended the instant cancel() returns.
 	var spans []oteltest.Span
 	require.Eventually(t, func() bool {
 		spans = exporter.Flush()
@@ -361,13 +318,9 @@ func TestInstrumentClient_StreamAbandonedOnContextCancel(t *testing.T) {
 	assert.Contains(t, clientSpan.Status().Description, "abandoned")
 }
 
-// TestStartCall_AlreadyDoneContext_NoRace guards against a real data race
-// found in review: context.AfterFunc calls its callback immediately, in its
-// own goroutine, if ctx is already done when registered. That callback calls
-// callState.end, which reads state.stopWatch - concurrently with startCall's
-// own goroutine still assigning that field from context.AfterFunc's return
-// value. Run with -race; this only fails under -race, not on a plain `go
-// test` run, since the race itself doesn't corrupt any observable state here.
+// Regression test for a data race: context.AfterFunc calls its callback
+// immediately, in its own goroutine, if ctx is already done when
+// registered. Only fails under -race.
 func TestStartCall_AlreadyDoneContext_NoRace(t *testing.T) {
 	setupOtel(t)
 
