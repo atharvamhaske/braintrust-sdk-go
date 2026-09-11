@@ -43,6 +43,8 @@ func main() {
 	}{
 		{"chat-reasoning", chatReasoning},
 		{"chat-completion", chatCompletion},
+		{"legacy-completion", legacyCompletion},
+		{"legacy-completion-streaming", legacyCompletionStreaming},
 		{"chat-multi-turn", chatMultiTurn},
 		{"chat-streaming", chatStreaming},
 		{"chat-tools", chatTools},
@@ -97,6 +99,40 @@ func chatCompletion(ctx context.Context, client openai.Client) error {
 	}
 	fmt.Printf("  %s\n", resp.Choices[0].Message.Content)
 	return nil
+}
+
+func legacyCompletion(ctx context.Context, client openai.Client) error {
+	resp, err := client.Completions.New(ctx, openai.CompletionNewParams{
+		Model: "gpt-3.5-turbo-instruct",
+		Prompt: openai.CompletionNewParamsPromptUnion{
+			OfString: openai.String("Say hello"),
+		},
+		MaxTokens: openai.Int(20),
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  %s\n", resp.Choices[0].Text)
+	return nil
+}
+
+func legacyCompletionStreaming(ctx context.Context, client openai.Client) error {
+	stream := client.Completions.NewStreaming(ctx, openai.CompletionNewParams{
+		Model: "gpt-3.5-turbo-instruct",
+		Prompt: openai.CompletionNewParamsPromptUnion{
+			OfString: openai.String("Count 1 to 3:"),
+		},
+		MaxTokens: openai.Int(20),
+	})
+	fmt.Print("  ")
+	for stream.Next() {
+		chunk := stream.Current()
+		if len(chunk.Choices) > 0 {
+			fmt.Print(chunk.Choices[0].Text)
+		}
+	}
+	fmt.Println()
+	return stream.Err()
 }
 
 func chatMultiTurn(ctx context.Context, client openai.Client) error {
