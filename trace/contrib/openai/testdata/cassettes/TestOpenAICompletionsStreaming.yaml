@@ -1,0 +1,150 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 94
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"prompt":"Count from 1 to 3:","model":"gpt-3.5-turbo-instruct","max_tokens":20,"stream":true}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://api.openai.com/v1/completions
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: -1
+        uncompressed: false
+        body: |+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" ","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"1","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"\n","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"Count","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" from","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" ","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"1","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" to","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" ","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"3","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":":","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" ","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"2","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"\n","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"Count","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" from","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" ","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":"1","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" to","index":0,"logprobs":null,"finish_reason":null}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: {"id":"cmpl-EMo5CDBY9DCOxaMomUNqyLgqfu4ad","object":"text_completion","created":1789104442,"choices":[{"text":" ","index":0,"logprobs":null,"finish_reason":"length"}],"model":"gpt-3.5-turbo-instruct:20230824-v2"}
+
+            data: [DONE]
+
+        headers:
+            Access-Control-Allow-Origin:
+                - '*'
+            Access-Control-Expose-Headers:
+                - X-Request-ID
+                - CF-Ray
+                - CF-Ray
+            Alt-Svc:
+                - h3=":443"; ma=86400
+            Cache-Control:
+                - no-cache, must-revalidate
+            Cf-Cache-Status:
+                - DYNAMIC
+            Cf-Ray:
+                - a39443484f534445-BOM
+            Content-Type:
+                - text/event-stream
+            Date:
+                - Fri, 11 Sep 2026 05:27:23 GMT
+            Openai-Model:
+                - gpt-3.5-turbo-instruct:20230824-v2
+            Openai-Organization:
+                - fluxai-ql6txb
+            Openai-Processing-Ms:
+                - "472"
+            Openai-Project:
+                - proj_TyVyJP3AZBjMBnVymwmezBd2
+            Openai-Version:
+                - "2020-10-01"
+            Server:
+                - cloudflare
+            Set-Cookie:
+                - __cf_bm=EPV7q8QTi9X8Al40YbA7CEJJ.w2b9a8kbma9kZF0V8A-1789104441.6470253-1.0.1.1-ozEzC5slFjuM46rxAwf_05QEm1mZcMC1OPEYRQ2GF4lz_vQ4CisyWal0sIrCEv1T7LaWvKVL7ueOK2z34kWSeVF138iGBAM_VyXRM8y94U4RDm5daR6j80ZpFYW.I_7.; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Fri, 11 Sep 2026 05:57:23 GMT
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains; preload
+            Via:
+                - envoy-router-57dcdd94d7-8wfh5
+            X-Content-Type-Options:
+                - nosniff
+            X-Engine-Geography:
+                - US
+            X-Openai-Proxy-Wasm:
+                - v0.1
+            X-Ratelimit-Limit-Requests:
+                - "3500"
+            X-Ratelimit-Limit-Tokens:
+                - "90000"
+            X-Ratelimit-Remaining-Requests:
+                - "3498"
+            X-Ratelimit-Remaining-Tokens:
+                - "89995"
+            X-Ratelimit-Reset-Requests:
+                - 17ms
+            X-Ratelimit-Reset-Tokens:
+                - 3ms
+            X-Request-Id:
+                - req_827b6522c21745f5a38b8e0be845bedf
+        status: 200 OK
+        code: 200
+        duration: 1.555367375s

@@ -112,6 +112,10 @@ func openaiRouter(cfg *middlewareConfig, path string) internal.MiddlewareTracer 
 		return newChatCompletionsTracer(cfg)
 	}
 
+	if strings.HasSuffix(path, "/v1/completions") {
+		return newCompletionsTracer(cfg)
+	}
+
 	if strings.HasSuffix(path, "/v1/responses") {
 		return newResponsesTracer(cfg)
 	}
