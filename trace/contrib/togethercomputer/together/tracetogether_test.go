@@ -3,6 +3,7 @@ package together
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	together "github.com/togethercomputer/together-go"
@@ -19,10 +20,26 @@ import (
 const testModel = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 const testEmbeddingModel = "togethercomputer/m2-bert-80M-8k-retrieval"
 
+// skipIfNoCassette skips replay-mode tests whose cassette hasn't been
+// recorded yet, so `make test` stays green until someone with a funded
+// TOGETHER_API_KEY runs VCR_MODE=record.
+func skipIfNoCassette(t *testing.T) {
+	t.Helper()
+
+	if vcr.GetVCRMode() != vcr.ModeReplay {
+		return
+	}
+	path := filepath.Join("testdata", "cassettes", t.Name()+".yaml")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Skipf("cassette not recorded yet: %s (run VCR_MODE=record with a funded TOGETHER_API_KEY)", path)
+	}
+}
+
 // setUpTest sets up a new tracer provider and VCR for each test. It returns a
 // Together client configured with tracing and VCR, plus the span exporter.
 func setUpTest(t *testing.T) (together.Client, *oteltest.Exporter) {
 	t.Helper()
+	skipIfNoCassette(t)
 
 	tp, exporter := oteltest.Setup(t)
 
