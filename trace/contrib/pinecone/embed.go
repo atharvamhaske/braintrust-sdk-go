@@ -74,8 +74,8 @@ func (et *embedTracer) TagSpan(span trace.Span, body io.Reader) error {
 	return internal.SetJSONAttr(span, "braintrust.metrics", metrics)
 }
 
-// canonicalEmbedInput extracts the input texts and parameters, omitting
-// nothing sizeable since embed inputs are plain strings.
+// canonicalEmbedInput extracts the input texts and parameters. Unlike the
+// output embeddings, inputs are plain strings, so nothing here needs summarizing.
 func canonicalEmbedInput(raw map[string]any) map[string]any {
 	texts := []any{}
 	if inputs, ok := raw["inputs"].([]any); ok {
