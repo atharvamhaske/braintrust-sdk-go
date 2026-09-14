@@ -49,6 +49,8 @@ github.com/DataDog/sketches-go v1.4.8/go.mod h1:a/wjRUqzqtGS8qRHRPDCs4EAQfmvPDZG
 github.com/Microsoft/go-winio v0.5.0/go.mod h1:JPGBdM1cNvN/6ISo+n8V5iA4v8pBzdOpzfwIujj1a84=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+github.com/a2aproject/a2a-go v0.3.15 h1:h5YpCiPq3jxQ5rIns7oDjPag3ivP8u817AzdA4F+NiI=
+github.com/a2aproject/a2a-go v0.3.15/go.mod h1:I7Cm+a1oL+UT6zMoP+roaRE5vdfUa1iQGVN8aSOuZ0I=
 github.com/airbrake/gobrake v3.6.1+incompatible/go.mod h1:wM4gu3Cn0W0K7GUuVWnlXZU11AGBXMILnrdOU8Kn00o=
 github.com/anthropics/anthropic-sdk-go v1.23.0 h1:YVNnxfVVPJM+zvQ1oDgTJUBtLttGpBHe1WtJBr0QeAs=
 github.com/anthropics/anthropic-sdk-go v1.23.0/go.mod h1:WTz31rIUHUHqai2UslPpw5CwXrQP3geYBioRV4WOLvE=
@@ -92,8 +94,8 @@ github.com/bitly/go-simplejson v0.5.0/go.mod h1:cXHtHw4XUPsvGaxgjIAn8PhEWG9NfngE
 github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb h1:m935MPodAbYS46DG4pJSv7WO+VECIWUQ7OJYSoTrMh4=
 github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb/go.mod h1:PkYb9DJNAwrSvRx5DYA+gUcOIgTGVMNkfSCbZM8cWpI=
 github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869/go.mod h1:Ekp36dRnpXw/yCqJaO+ZrUyxD+3VXMFFr56k5XYrpB4=
-github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.11.0 h1:7MjjC+Fab3N9TJgFV8WDm0+guXC1FYX8T1xQdRyvQDE=
-github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.11.0/go.mod h1:B5E3fRrHHYke+V+0MFe+0k7LOMCqzfmxzg5+8VJUf9Q=
+github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.13.0 h1:3Jso3Gu1mfZ9EyFHw18vpno1o+FUGGlDUaI6YZVF4Nk=
+github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.13.0/go.mod h1:FkwIupsA9hIyBJVYUVSvEcXVyBDvVN/rmpQfHXS6Uag=
 github.com/buger/jsonparser v1.1.2 h1:frqHqw7otoVbk5M8LlE/L7HTnIq2v9RX6EJ48i9AxJk=
 github.com/buger/jsonparser v1.1.2/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
 github.com/bugsnag/bugsnag-go v1.4.0/go.mod h1:2oa8nejYd4cQ/b0hMIopN0lCRxU0bueqREvZLWFrtK8=
