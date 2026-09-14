@@ -9,12 +9,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.50.4
 	github.com/braintrustdata/braintrust-sdk-go v0.17.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic v0.17.0
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare v0.0.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino v0.17.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai v0.17.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit v0.17.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/github.com/sashabaranov/go-openai v0.17.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/openai v0.17.0
 	github.com/cloudwego/eino v0.8.4
+	github.com/cloudflare/cloudflare-go/v7 v7.10.0
 	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20260416081055-0ebab92e14f2
 	github.com/cloudwego/eino-ext/components/model/claude v0.1.15
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.10

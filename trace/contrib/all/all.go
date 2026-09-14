@@ -26,9 +26,13 @@
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino (CloudWeGo Eino)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo (LangChainGo)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a (A2A protocol)
+//   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare (Cloudflare Workers AI)
 package all
 
 import (
+	// Cloudflare Workers AI
+	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare"
+
 	// A2A protocol (github.com/a2aproject/a2a-go)
 	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a"
 

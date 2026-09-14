@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/a2aproject/a2a-go/a2a"
@@ -11,7 +12,11 @@ import (
 	"github.com/a2aproject/a2a-go/a2asrv"
 	"github.com/a2aproject/a2a-go/a2asrv/eventqueue"
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
+		anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
+	cf "github.com/cloudflare/cloudflare-go/v7"
+	cfai "github.com/cloudflare/cloudflare-go/v7/ai"
+	cfoption "github.com/cloudflare/cloudflare-go/v7/option"
+	cfshared "github.com/cloudflare/cloudflare-go/v7/shared"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	compatopenai "github.com/firebase/genkit/go/plugins/compat_oai/openai"
@@ -332,6 +337,34 @@ func TestGenAI(t *testing.T) {
 	require.True(t, found, "Expected generate_content span")
 }
 
+// TestCloudflare verifies orchestrion injects Braintrust tracing for Workers AI.
+func TestCloudflare(t *testing.T) {
+	exporter := setupOtel(t)
+	client := cf.NewClient(
+		cfoption.WithAPIToken(cloudflareAPIToken()),
+		cfoption.WithHTTPClient(vcr.NewHTTPClient(t)),
+	)
+	_, err := client.AI.Run(context.Background(), "@cf/meta/llama-3.1-8b-instruct-fast", cfai.AIRunParams{
+		AccountID: cf.F(cloudflareAccountID()),
+		Body: cfai.AIRunParamsBodyTextGeneration{
+			Messages: cf.F([]cfai.AIRunParamsBodyTextGenerationMessage{{
+				Role: "user",
+				Content: cf.F[cfai.AIRunParamsBodyTextGenerationMessagesContentUnion](cfshared.UnionString("Say hello")),
+			}}),
+		},
+	})
+	require.NoError(t, err)
+
+	spans := exporter.Flush()
+	found := false
+	for _, span := range spans {
+		if span.Name() == "cloudflare.ai.text_generation" {
+			found = true
+		}
+	}
+	require.True(t, found, "expected cloudflare.ai.text_generation span")
+}
+
 // TestLangChainGo verifies that orchestrion auto-injects the Braintrust callback
 // for LangChainGo's OpenAI client. This test creates the client WITHOUT manually
 // adding a callback. If orchestrion is working, it will inject the callback at
@@ -554,4 +587,18 @@ func setupOtel(t *testing.T) *oteltest.Exporter {
 	})
 
 	return exporter
+}
+
+func cloudflareAPIToken() string {
+	if token := os.Getenv("CLOUDFLARE_API_TOKEN"); token != "" {
+		return token
+	}
+	return "dummy-key-for-vcr"
+}
+
+func cloudflareAccountID() string {
+	if id := os.Getenv("CLOUDFLARE_ACCOUNT_ID"); id != "" {
+		return id
+	}
+	return "dummy-account-id-for-replay"
 }
