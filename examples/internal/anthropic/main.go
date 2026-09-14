@@ -348,6 +348,85 @@ func (a *AnthropicBot) vision(ctx context.Context) error {
 	return nil
 }
 
+// contextManagement demonstrates Claude clearing stale tool results from a
+// longer agent conversation and reporting exactly what it removed.
+func (a *AnthropicBot) contextManagement(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "context-management")
+	defer span.End()
+
+	fmt.Println("\n=== Example 7: Context Management ===")
+
+	messages := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("Check the weather in Paris and London.")),
+	}
+	toolCalls := []struct {
+		id   string
+		city string
+	}{
+		{id: "toolu_weather_paris", city: "Paris"},
+		{id: "toolu_weather_london", city: "London"},
+	}
+	for i, toolCall := range toolCalls {
+		messages = append(messages, anthropic.BetaMessageParam{
+			Role: anthropic.BetaMessageParamRoleAssistant,
+			Content: []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaToolUseBlock(toolCall.id, map[string]any{"location": toolCall.city}, "get_weather"),
+			},
+		})
+
+		toolResult := anthropic.NewBetaToolResultBlock(toolCall.id)
+		// Deliberately verbose so the low demo threshold triggers an edit.
+		toolResult.OfToolResult.Content = []anthropic.BetaToolResultBlockParamContentUnion{{
+			OfText: &anthropic.BetaTextBlockParam{
+				Text: strings.Repeat(toolCall.city+" weather observation: sunny, 18 C. ", 20),
+			},
+		}}
+		blocks := []anthropic.BetaContentBlockParamUnion{toolResult}
+		if i == len(toolCalls)-1 {
+			blocks = append(blocks, anthropic.NewBetaTextBlock("Summarize the latest weather results briefly."))
+		}
+		messages = append(messages, anthropic.NewBetaUserMessage(blocks...))
+	}
+
+	msg, err := a.client.Beta.Messages.New(ctx, anthropic.BetaMessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 128,
+		Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaContextManagement2025_06_27},
+		ContextManagement: anthropic.BetaContextManagementConfigParam{
+			Edits: []anthropic.BetaContextManagementConfigEditUnionParam{{
+				OfClearToolUses20250919: &anthropic.BetaClearToolUses20250919EditParam{
+					Trigger: anthropic.BetaClearToolUses20250919EditTriggerUnionParam{
+						OfInputTokens: &anthropic.BetaInputTokensTriggerParam{Value: 20},
+					},
+					ClearAtLeast: anthropic.BetaInputTokensClearAtLeastParam{Value: 5},
+					Keep:         anthropic.BetaToolUsesKeepParam{Value: 1},
+				},
+			}},
+		},
+		Messages: messages,
+		Tools: []anthropic.BetaToolUnionParam{
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{
+				Properties: map[string]any{"location": map[string]any{"type": "string"}},
+			}, "get_weather"),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("context management error: %v", err)
+	}
+
+	for _, content := range msg.Content {
+		if content.Type == "text" {
+			fmt.Printf("  Response: %s\n", content.Text)
+		}
+	}
+	fmt.Printf("  Applied edits: %d\n", len(msg.ContextManagement.AppliedEdits))
+	for _, edit := range msg.ContextManagement.AppliedEdits {
+		fmt.Printf("  Applied %s: cleared %d tool uses and %d input tokens\n",
+			edit.Type, edit.ClearedToolUses, edit.ClearedInputTokens)
+	}
+	return nil
+}
+
 func main() {
 	fmt.Println("Braintrust Anthropic Tracing Examples")
 	fmt.Println("======================================")
@@ -380,7 +459,7 @@ func main() {
 	// ======================
 	fmt.Println("\nAnthropic Messages Examples")
 	fmt.Println("===========================")
-	fmt.Println("Demonstrating: system prompts, tools, parameters, streaming, citations, prompt caching, vision & non-streaming")
+	fmt.Println("Demonstrating: messages, tools, streaming, citations, extended thinking, prompt caching, vision, and context management")
 
 	bot := newAnthropicBot(client)
 
@@ -413,6 +492,10 @@ func main() {
 	}
 
 	if err := bot.vision(ctx); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	if err := bot.contextManagement(ctx); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 

@@ -59,6 +59,7 @@ func (mt *messagesTracer) StartSpan(ctx context.Context, t time.Time, request io
 		"mcp_servers",
 		"service_tier",
 		"thinking",
+		"context_management",
 	}
 
 	// handle simple fields here.
@@ -165,6 +166,7 @@ func (mt *messagesTracer) parseStreamingResponse(span trace.Span, body io.Reader
 	if model := accumulator.Model(); model != "" {
 		mt.metadata["model"] = model
 	}
+	mt.mergeContextManagement(accumulator.ContextManagement())
 	if err := internal.SetJSONAttr(span, "braintrust.metadata", mt.metadata); err != nil {
 		return err
 	}
@@ -200,6 +202,10 @@ func (mt *messagesTracer) handleMessageResponse(span trace.Span, rawMsg map[stri
 		mt.metadata["model"] = model
 	}
 
+	if contextManagement, ok := rawMsg["context_management"].(map[string]any); ok {
+		mt.mergeContextManagement(contextManagement)
+	}
+
 	if err := internal.SetJSONAttr(span, "braintrust.metadata", mt.metadata); err != nil {
 		return err
 	}
@@ -228,6 +234,22 @@ func (mt *messagesTracer) handleMessageResponse(span trace.Span, rawMsg map[stri
 	}
 
 	return nil
+}
+
+// mergeContextManagement combines response-side applied edits with the request
+// configuration already captured in metadata.
+func (mt *messagesTracer) mergeContextManagement(response map[string]any) {
+	appliedEdits, ok := response["applied_edits"]
+	if !ok {
+		return
+	}
+
+	contextManagement, _ := mt.metadata["context_management"].(map[string]any)
+	if contextManagement == nil {
+		contextManagement = make(map[string]any)
+	}
+	contextManagement["applied_edits"] = appliedEdits
+	mt.metadata["context_management"] = contextManagement
 }
 
 // normalizeMessageContent simplifies a message's content field when it is a
