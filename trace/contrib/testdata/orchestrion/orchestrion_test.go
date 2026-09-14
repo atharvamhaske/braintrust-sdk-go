@@ -148,6 +148,21 @@ func TestA2A(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// Direct factory creation must be instrumented too, not only the two
+	// convenience constructors above.
+	existingFactoryOpts := []a2aclient.FactoryOption{}
+	factory := a2aclient.NewFactory(existingFactoryOpts...)
+	factoryClient, err := factory.CreateFromEndpoints(context.Background(), []a2a.AgentInterface{
+		{Transport: a2a.TransportProtocolJSONRPC, URL: server.URL + "/invoke"},
+	})
+	require.NoError(t, err)
+	defer func() { _ = factoryClient.Destroy() }()
+
+	_, err = factoryClient.SendMessage(context.Background(), &a2a.MessageSendParams{
+		Message: a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: "hello from factory"}),
+	})
+	require.NoError(t, err)
+
 	spans := exporter.Flush()
 	require.NotEmpty(t, spans, "No spans created - orchestrion did not inject tracing for A2A")
 
@@ -156,14 +171,13 @@ func TestA2A(t *testing.T) {
 		t.Logf("  - %s", span.Name())
 	}
 
-	found := false
+	clientSpanCount := 0
 	for _, span := range spans {
-		if span.Name() == "a2a.SendMessage" {
-			found = true
-			break
+		if span.Name() == "a2a.SendMessage" && span.Metadata()["role"] == "client" {
+			clientSpanCount++
 		}
 	}
-	require.True(t, found, "Expected a2a.SendMessage span")
+	require.Equal(t, 2, clientSpanCount, "expected direct constructor and factory-created clients to be instrumented")
 }
 
 type a2aEchoExecutor struct{}

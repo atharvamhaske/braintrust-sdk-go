@@ -10,7 +10,11 @@ package tracea2a
 
 import (
 	"context"
+	"maps"
+	"slices"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/a2aproject/a2a-go/a2a"
 	"github.com/a2aproject/a2a-go/a2aclient"
@@ -39,7 +43,14 @@ func (c callMetaCarrier) Get(key string) string {
 }
 
 func (c callMetaCarrier) Set(key, value string) {
-	a2aclient.CallMeta(c).Append(key, value)
+	meta := a2aclient.CallMeta(c)
+	canonicalKey := strings.ToLower(key)
+	for existingKey := range meta {
+		if existingKey != canonicalKey && strings.EqualFold(existingKey, key) {
+			delete(meta, existingKey)
+		}
+	}
+	meta[canonicalKey] = []string{value}
 }
 
 func (c callMetaCarrier) Keys() []string {
@@ -77,43 +88,27 @@ func (c requestMetaCarrier) Keys() []string {
 // once per event instead of once per call.
 var streamingMethods = map[string]bool{
 	"SendStreamingMessage": true,
-	"ResubscribeToTask":    true,
 	"OnSendMessageStream":  true,
-	"OnResubscribeToTask":  true,
-}
-
-// taskMethods operate on an actual A2A task, as opposed to admin/config
-// calls (AgentCard, push notification config). Only these get
-// span_attributes.type = "task".
-var taskMethods = map[string]bool{
-	"SendMessage":          true,
-	"SendStreamingMessage": true,
-	"GetTask":              true,
-	"CancelTask":           true,
-	"ResubscribeToTask":    true,
-	"OnSendMessage":        true,
-	"OnSendMessageStream":  true,
-	"OnGetTask":            true,
-	"OnCancelTask":         true,
-	"OnResubscribeToTask":  true,
 }
 
 type spanContextKey struct{}
+type suppressedContextKey struct{}
 
 // callState accumulates every event payload seen across a call so the final
 // output reflects everything produced, not just the last event.
 //
-// owner is the interceptor instance that created this state. If a second
-// tracing interceptor is attached (Orchestrion + manual, or manual twice),
-// its Before/After sees state already present and no-ops instead of
-// duplicating the span.
+// callID identifies the SDK request shared by every interceptor attached to
+// one call. This suppresses duplicate instrumentation without suppressing a
+// nested A2A call that inherits the parent call's context.
 type callState struct {
-	mu     sync.Mutex
-	span   trace.Span
-	method string
-	events []any
-	owner  any
-	ended  bool
+	mu           sync.Mutex
+	span         trace.Span
+	events       []any
+	started      time.Time
+	firstContent bool
+	callID       any
+	owner        any
+	ended        bool
 
 	stopWatch func() bool
 }
@@ -131,6 +126,23 @@ func (s *callState) snapshotEvents() []any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]any(nil), s.events...)
+}
+
+func (s *callState) recordFirstContent(payload any) {
+	if !hasContent(payload) {
+		return
+	}
+
+	s.mu.Lock()
+	if s.firstContent || s.ended {
+		s.mu.Unlock()
+		return
+	}
+	s.firstContent = true
+	_ = internal.SetJSONAttr(s.span, "braintrust.metrics", map[string]float64{
+		"time_to_first_token": time.Since(s.started).Seconds(),
+	})
+	s.mu.Unlock()
 }
 
 // setStopWatch is mutex-guarded because context.AfterFunc invokes its
@@ -164,7 +176,11 @@ func tracer() trace.Tracer {
 	return otel.GetTracerProvider().Tracer("braintrust")
 }
 
-// InstrumentClient adds Braintrust tracing to an a2aclient.Client.
+// InstrumentClient adds Braintrust tracing to eligible direct message calls
+// made by an a2aclient.Client. Detached task lifecycle and administration
+// methods are intentionally excluded.
+// Streaming calls that may stop iteration before a terminal event must use a
+// cancellable context and cancel it when iteration stops.
 func InstrumentClient(client *a2aclient.Client) {
 	if client == nil {
 		return
@@ -173,7 +189,8 @@ func InstrumentClient(client *a2aclient.Client) {
 }
 
 // NewClientInterceptor is exposed for a2aclient.WithInterceptors(...); most
-// callers should use InstrumentClient instead.
+// callers should use InstrumentClient instead. The same streaming context
+// requirements documented on InstrumentClient apply.
 func NewClientInterceptor() a2aclient.CallInterceptor {
 	return &clientTracer{tr: tracer()}
 }
@@ -183,22 +200,52 @@ func InstrumentServer() a2asrv.RequestHandlerOption {
 	return a2asrv.WithCallInterceptor(&serverTracer{tr: tracer()})
 }
 
-// startCall starts a span, stores its callState in ctx under owner, and
-// arms a context.AfterFunc that ends the span as abandoned if ctx finishes
-// before finish() does. No-ops if ctx already carries a callState.
-func startCall(ctx context.Context, tr trace.Tracer, name, method, role string, kind trace.SpanKind, payload any, owner any) context.Context {
-	if _, exists := ctx.Value(spanContextKey{}).(*callState); exists {
+func isCurrentCall(ctx context.Context, callID any) bool {
+	state, ok := ctx.Value(spanContextKey{}).(*callState)
+	return ok && state.callID == callID
+}
+
+func shouldInstrumentCall(method string, payload any) bool {
+	switch method {
+	case "SendStreamingMessage", "OnSendMessageStream":
+		return true
+	case "SendMessage", "OnSendMessage":
+		params, ok := payload.(*a2a.MessageSendParams)
+		return !ok || params == nil || params.Config == nil || params.Config.Blocking == nil || *params.Config.Blocking
+	default:
+		// Detached task lifecycle, push notification, agent card, and other
+		// administration calls are outside auto-instrumentation eligibility.
+		return false
+	}
+}
+
+func instrumentationSuppressed(ctx context.Context) bool {
+	suppressed, _ := ctx.Value(suppressedContextKey{}).(bool)
+	return suppressed
+}
+
+// startCall starts a span, stores its callState in ctx, and arms a
+// context.AfterFunc that ends the span as abandoned if ctx finishes before
+// finish() does. It only no-ops for another interceptor observing the same SDK
+// request; nested A2A calls receive their own child span.
+func startCall(ctx context.Context, tr trace.Tracer, name, method, role string, kind trace.SpanKind, payload, callID, owner any) context.Context {
+	if isCurrentCall(ctx, callID) {
 		return ctx
 	}
 
+	started := time.Now()
 	ctx, span := tr.Start(ctx, name, trace.WithSpanKind(kind))
 	setMetadata(span, method, role)
-	setInput(span, payload)
+	setInput(span, inputForCall(payload))
+	_ = internal.SetJSONAttr(span, "braintrust.span_attributes", map[string]string{
+		"name": name,
+		"type": "task",
+	})
 
-	state := &callState{span: span, method: method, owner: owner}
+	state := &callState{span: span, started: started, callID: callID, owner: owner}
 	stop := context.AfterFunc(ctx, func() {
 		state.end(func() {
-			setOutput(state.span, state.method, state.snapshotEvents())
+			setOutput(state.span, state.snapshotEvents())
 			state.span.SetStatus(codes.Error, "stream abandoned: call context ended before a terminal event")
 		})
 	})
@@ -214,7 +261,12 @@ type clientTracer struct {
 }
 
 func (c *clientTracer) Before(ctx context.Context, req *a2aclient.Request) (context.Context, error) {
-	ctx = startCall(ctx, c.tr, "a2a."+req.Method, req.Method, "client", trace.SpanKindClient, req.Payload, c)
+	if !shouldInstrumentCall(req.Method, req.Payload) {
+		return context.WithValue(ctx, suppressedContextKey{}, true), nil
+	}
+
+	ctx = context.WithValue(ctx, suppressedContextKey{}, false)
+	ctx = startCall(ctx, c.tr, "a2a."+req.Method, req.Method, "client", trace.SpanKindClient, req.Payload, req, c)
 	if req.Meta == nil {
 		req.Meta = a2aclient.CallMeta{}
 	}
@@ -223,6 +275,9 @@ func (c *clientTracer) Before(ctx context.Context, req *a2aclient.Request) (cont
 }
 
 func (c *clientTracer) After(ctx context.Context, resp *a2aclient.Response) error {
+	if instrumentationSuppressed(ctx) {
+		return nil
+	}
 	state, ok := ctx.Value(spanContextKey{}).(*callState)
 	if !ok || state.owner != c {
 		return nil
@@ -238,11 +293,21 @@ type serverTracer struct {
 }
 
 func (s *serverTracer) Before(ctx context.Context, callCtx *a2asrv.CallContext, req *a2asrv.Request) (context.Context, error) {
+	if !shouldInstrumentCall(callCtx.Method(), req.Payload) {
+		return context.WithValue(ctx, suppressedContextKey{}, true), nil
+	}
+	if isCurrentCall(ctx, req) {
+		return context.WithValue(ctx, suppressedContextKey{}, false), nil
+	}
+	ctx = context.WithValue(ctx, suppressedContextKey{}, false)
 	ctx = a2aPropagator.Extract(ctx, requestMetaCarrier{meta: callCtx.RequestMeta()})
-	return startCall(ctx, s.tr, "a2a."+callCtx.Method(), callCtx.Method(), "server", trace.SpanKindServer, req.Payload, s), nil
+	return startCall(ctx, s.tr, "a2a."+callCtx.Method(), callCtx.Method(), "server", trace.SpanKindServer, req.Payload, req, s), nil
 }
 
 func (s *serverTracer) After(ctx context.Context, callCtx *a2asrv.CallContext, resp *a2asrv.Response) error {
+	if instrumentationSuppressed(ctx) {
+		return nil
+	}
 	state, ok := ctx.Value(spanContextKey{}).(*callState)
 	if !ok || state.owner != s {
 		return nil
@@ -266,6 +331,9 @@ func finish(state *callState, payload any, err error, streaming bool) {
 		return
 	}
 
+	if streaming {
+		state.recordFirstContent(payload)
+	}
 	state.addEvent(payload)
 
 	if streaming && !isTerminalEvent(payload) {
@@ -273,7 +341,7 @@ func finish(state *callState, payload any, err error, streaming bool) {
 	}
 
 	state.end(func() {
-		setOutput(state.span, state.method, state.snapshotEvents())
+		setOutput(state.span, state.snapshotEvents())
 	})
 }
 
@@ -284,8 +352,10 @@ func finish(state *callState, payload any, err error, streaming bool) {
 // the span once the call's context ends.
 func isTerminalEvent(payload any) bool {
 	switch v := payload.(type) {
-	case *a2a.Message, *a2a.Task:
+	case *a2a.Message:
 		return true
+	case *a2a.Task:
+		return v.Status.State.Terminal() || v.Status.State == a2a.TaskStateInputRequired
 	case *a2a.TaskStatusUpdateEvent:
 		return v.Final
 	case *a2a.TaskArtifactUpdateEvent:
@@ -295,34 +365,156 @@ func isTerminalEvent(payload any) bool {
 	}
 }
 
+// A2A task metadata is intentionally limited to this explicit allowlist.
 func setMetadata(span trace.Span, method, role string) {
 	_ = internal.SetJSONAttr(span, "braintrust.metadata", map[string]any{
-		"provider": "a2a",
 		"method":   method,
+		"protocol": "a2a",
 		"role":     role,
 	})
 }
 
-func setInput(span trace.Span, payload any) {
-	if payload == nil {
-		return
+func inputForCall(payload any) any {
+	params, ok := payload.(*a2a.MessageSendParams)
+	if !ok || params == nil {
+		return nil
 	}
-	_ = internal.SetJSONAttr(span, "braintrust.input_json", payload)
+	return params.Message
 }
 
-// setOutput writes a single event directly, or the full ordered list for a
-// multi-event stream.
-func setOutput(span trace.Span, method string, events []any) {
-	if len(events) == 0 {
+func setInput(span trace.Span, input any) {
+	if input == nil {
 		return
 	}
-	output := any(events)
-	if len(events) == 1 {
-		output = events[0]
+	_ = internal.SetJSONAttr(span, "braintrust.input_json", input)
+}
+
+func hasContent(payload any) bool {
+	switch v := payload.(type) {
+	case *a2a.Message:
+		return v != nil && len(v.Parts) > 0
+	case *a2a.Task:
+		if v == nil {
+			return false
+		}
+		if v.Status.Message != nil && len(v.Status.Message.Parts) > 0 {
+			return true
+		}
+		for _, artifact := range v.Artifacts {
+			if artifact != nil && len(artifact.Parts) > 0 {
+				return true
+			}
+		}
+	case *a2a.TaskStatusUpdateEvent:
+		return v != nil && v.Status.Message != nil && len(v.Status.Message.Parts) > 0
+	case *a2a.TaskArtifactUpdateEvent:
+		return v != nil && v.Artifact != nil && len(v.Artifact.Parts) > 0
+	}
+	return false
+}
+
+// setOutput reduces streamed task updates into the same Task or Message shape
+// returned by a non-streaming call.
+func setOutput(span trace.Span, events []any) {
+	output := aggregateOutput(events)
+	if output == nil {
+		return
 	}
 	_ = internal.SetJSONAttr(span, "braintrust.output_json", output)
+}
 
-	if taskMethods[method] {
-		_ = internal.SetJSONAttr(span, "braintrust.span_attributes", map[string]string{"type": "task"})
+func aggregateOutput(events []any) any {
+	if len(events) == 0 {
+		return nil
+	}
+	if len(events) == 1 {
+		return events[0]
+	}
+
+	var task *a2a.Task
+	for _, event := range events {
+		switch v := event.(type) {
+		case *a2a.Message:
+			return v
+		case *a2a.Task:
+			task = cloneTask(v)
+		case *a2a.TaskStatusUpdateEvent:
+			if v == nil {
+				continue
+			}
+			task = ensureTask(task, v.TaskID, v.ContextID)
+			task.Status = v.Status
+			if v.Metadata != nil {
+				if task.Metadata == nil {
+					task.Metadata = make(map[string]any, len(v.Metadata))
+				}
+				maps.Copy(task.Metadata, v.Metadata)
+			}
+		case *a2a.TaskArtifactUpdateEvent:
+			if v == nil || v.Artifact == nil {
+				continue
+			}
+			task = ensureTask(task, v.TaskID, v.ContextID)
+			applyArtifactUpdate(task, v)
+		default:
+			return events
+		}
+	}
+	return task
+}
+
+func ensureTask(task *a2a.Task, taskID a2a.TaskID, contextID string) *a2a.Task {
+	if task != nil {
+		return task
+	}
+	return &a2a.Task{ID: taskID, ContextID: contextID}
+}
+
+func cloneTask(task *a2a.Task) *a2a.Task {
+	if task == nil {
+		return nil
+	}
+	cloned := *task
+	cloned.Artifacts = make([]*a2a.Artifact, len(task.Artifacts))
+	for i, artifact := range task.Artifacts {
+		cloned.Artifacts[i] = cloneArtifact(artifact)
+	}
+	cloned.History = slices.Clone(task.History)
+	cloned.Metadata = maps.Clone(task.Metadata)
+	return &cloned
+}
+
+func cloneArtifact(artifact *a2a.Artifact) *a2a.Artifact {
+	if artifact == nil {
+		return nil
+	}
+	cloned := *artifact
+	cloned.Parts = slices.Clone(artifact.Parts)
+	cloned.Extensions = slices.Clone(artifact.Extensions)
+	cloned.Metadata = maps.Clone(artifact.Metadata)
+	return &cloned
+}
+
+func applyArtifactUpdate(task *a2a.Task, event *a2a.TaskArtifactUpdateEvent) {
+	artifact := cloneArtifact(event.Artifact)
+	index := slices.IndexFunc(task.Artifacts, func(existing *a2a.Artifact) bool {
+		return existing != nil && existing.ID == artifact.ID
+	})
+	if index < 0 {
+		task.Artifacts = append(task.Artifacts, artifact)
+		return
+	}
+	if !event.Append {
+		task.Artifacts[index] = artifact
+		return
+	}
+
+	existing := task.Artifacts[index]
+	existing.Parts = append(existing.Parts, artifact.Parts...)
+	if artifact.Metadata != nil {
+		if existing.Metadata == nil {
+			existing.Metadata = make(map[string]any, len(artifact.Metadata))
+		}
+		maps.Copy(existing.Metadata, artifact.Metadata)
 	}
 }
