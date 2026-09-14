@@ -10,6 +10,7 @@ use (
 	./trace/contrib/all
 	./trace/contrib/anthropic
 	./trace/contrib/bedrockruntime
+	./trace/contrib/cloudflare
 	./trace/contrib/cloudwego/eino
 	./trace/contrib/genai
 	./trace/contrib/genkit

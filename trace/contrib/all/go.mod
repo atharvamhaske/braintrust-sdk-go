@@ -8,6 +8,7 @@ require (
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk v0.14.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic v0.14.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.14.0
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare v0.0.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino v0.14.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai v0.14.0
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit v0.14.0
@@ -34,6 +35,7 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cloudflare/cloudflare-go/v7 v7.10.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino v0.8.4 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
@@ -108,6 +110,7 @@ replace (
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk => ../adk
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic => ../anthropic
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime => ../bedrockruntime
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare => ../cloudflare
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino => ../cloudwego/eino
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genai => ../genai
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit => ../genkit
