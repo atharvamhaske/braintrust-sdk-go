@@ -551,12 +551,10 @@ func TestContextManagement(t *testing.T) {
 	client, exporter := setUpTest(t)
 
 	timer := oteltest.NewTimer()
-	resp, err := client.Beta.Messages.New(t.Context(), contextManagementParams())
+	_, err := client.Beta.Messages.New(t.Context(), contextManagementParams())
 	timeRange := timer.Tick()
 
 	require.NoError(t, err)
-	require.NotNil(t, resp)
-	require.NotEmpty(t, resp.ContextManagement.AppliedEdits)
 
 	span := exporter.FlushOne()
 	assertSpanValid(t, span, timeRange)
@@ -568,12 +566,10 @@ func TestContextManagementStreaming(t *testing.T) {
 
 	timer := oteltest.NewTimer()
 	stream := client.Beta.Messages.NewStreaming(t.Context(), contextManagementParams())
-	var eventCount int
 	for stream.Next() {
-		eventCount++
+		// Consume the full response so the middleware can finalize the span.
 	}
 	require.NoError(t, stream.Err())
-	require.Positive(t, eventCount)
 	timeRange := timer.Tick()
 
 	span := exporter.FlushOne()

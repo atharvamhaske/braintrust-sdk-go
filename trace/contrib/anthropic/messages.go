@@ -166,18 +166,7 @@ func (mt *messagesTracer) parseStreamingResponse(span trace.Span, body io.Reader
 	if model := accumulator.Model(); model != "" {
 		mt.metadata["model"] = model
 	}
-	// The stream's message events carry the response-side context_management.applied_edits,
-	// the same information handleMessageResponse reads
-	// from the non-streaming response body. Merge it under the same key as the
-	// request-side config so both live together.
-	if appliedEdits, exists := accumulator.ContextManagement()["applied_edits"]; exists {
-		contextManagement, _ := mt.metadata["context_management"].(map[string]any)
-		if contextManagement == nil {
-			contextManagement = make(map[string]any)
-		}
-		contextManagement["applied_edits"] = appliedEdits
-		mt.metadata["context_management"] = contextManagement
-	}
+	mt.mergeContextManagement(accumulator.ContextManagement())
 	if err := internal.SetJSONAttr(span, "braintrust.metadata", mt.metadata); err != nil {
 		return err
 	}
@@ -213,21 +202,8 @@ func (mt *messagesTracer) handleMessageResponse(span trace.Span, rawMsg map[stri
 		mt.metadata["model"] = model
 	}
 
-	// context_management.applied_edits reports which context-editing strategies
-	// actually fired (e.g. clear_tool_uses_20250919, clear_thinking_20251015) and
-	// how much they cleared - operational detail the request-side config alone
-	// doesn't show, and that affects visible conversation state and cache hits.
-	// Nested under the same "context_management" metadata key as the request-side
-	// config so both live under one key.
-	if responseContextManagement, ok := rawMsg["context_management"].(map[string]any); ok {
-		if appliedEdits, exists := responseContextManagement["applied_edits"]; exists {
-			contextManagement, _ := mt.metadata["context_management"].(map[string]any)
-			if contextManagement == nil {
-				contextManagement = make(map[string]any)
-			}
-			contextManagement["applied_edits"] = appliedEdits
-			mt.metadata["context_management"] = contextManagement
-		}
+	if contextManagement, ok := rawMsg["context_management"].(map[string]any); ok {
+		mt.mergeContextManagement(contextManagement)
 	}
 
 	if err := internal.SetJSONAttr(span, "braintrust.metadata", mt.metadata); err != nil {
@@ -258,6 +234,22 @@ func (mt *messagesTracer) handleMessageResponse(span trace.Span, rawMsg map[stri
 	}
 
 	return nil
+}
+
+// mergeContextManagement combines response-side applied edits with the request
+// configuration already captured in metadata.
+func (mt *messagesTracer) mergeContextManagement(response map[string]any) {
+	appliedEdits, ok := response["applied_edits"]
+	if !ok {
+		return
+	}
+
+	contextManagement, _ := mt.metadata["context_management"].(map[string]any)
+	if contextManagement == nil {
+		contextManagement = make(map[string]any)
+	}
+	contextManagement["applied_edits"] = appliedEdits
+	mt.metadata["context_management"] = contextManagement
 }
 
 // normalizeMessageContent simplifies a message's content field when it is a
