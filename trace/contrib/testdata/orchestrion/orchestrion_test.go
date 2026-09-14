@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -265,7 +263,6 @@ func TestGenAI(t *testing.T) {
 // manually adding middleware. If orchestrion is working, it will inject
 // the middleware at compile time, and spans will be created.
 func TestTogether(t *testing.T) {
-	skipIfNoCassette(t)
 	exporter := setupOtel(t)
 
 	httpClient := vcr.NewHTTPClient(t)
@@ -530,19 +527,4 @@ func setupOtel(t *testing.T) *oteltest.Exporter {
 	})
 
 	return exporter
-}
-
-// skipIfNoCassette skips replay-mode tests whose cassette hasn't been
-// recorded yet, so `make test` stays green until someone with a funded
-// TOGETHER_API_KEY runs VCR_MODE=record.
-func skipIfNoCassette(t *testing.T) {
-	t.Helper()
-
-	if vcr.GetVCRMode() != vcr.ModeReplay {
-		return
-	}
-	path := filepath.Join("testdata", "cassettes", t.Name()+".yaml")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Skipf("cassette not recorded yet: %s (run VCR_MODE=record with a funded TOGETHER_API_KEY)", path)
-	}
 }
