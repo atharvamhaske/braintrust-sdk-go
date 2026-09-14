@@ -1,0 +1,112 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 189
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"messages":[{"content":"What is a notable news headline from today? Include a source URL.","role":"user"}],"model":"gpt-5-search-api","stream_options":{"include_usage":true},"stream":true}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://api.openai.com/v1/chat/completions
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: -1
+        uncompressed: false
+        body: |+
+            data: {"id":"chatcmpl-b86084c6-823b-4fad-aee5-554bdba42e2a","object":"chat.completion.chunk","created":1789324448,"model":"gpt-5-search-api-2025-10-14","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"role":"assistant","content":"Here’s today’s notable headline:\n\n“Trump downplays the need to check AI development and says he doesn’t want to cede edge to China.”  \nPresident","refusal":null},"finish_reason":null}],"usage":null,"obfuscation":"3r0Xq"}
+
+            data: {"id":"chatcmpl-1369beee-9033-4dc9-ba4b-881bcec4acfe","object":"chat.completion.chunk","created":1789324448,"model":"gpt-5-search-api-2025-10-14","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":" Donald Trump said Sunday that he is reluctant to impose more regulations on artificial intelligence, expressing concerns about the U.S. losing"},"finish_reason":null}],"usage":null,"obfuscation":"tVEUOycrody"}
+
+            data: {"id":"chatcmpl-4492e881-649f-4555-b5cf-15b86f412042","object":"chat.completion.chunk","created":1789324448,"model":"gpt-5-search-api-2025-10-14","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":" its competitive advantage to China. ([apnews.com](https://apnews.com/article/9df0ebb4c1b0619aa0f88057b5a1092d?utm_source=openai))\n\nSource: AP News — https://apnews.com/article/9df0ebb4c1b0619aa0f88057b5a1092"},"finish_reason":null}],"usage":null,"obfuscation":"nhkTeta7"}
+
+            data: {"id":"chatcmpl-768619c4-e1ec-4803-bef2-0f93c54438a6","object":"chat.completion.chunk","created":1789324448,"model":"gpt-5-search-api-2025-10-14","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":"d"},"finish_reason":null}],"usage":null,"obfuscation":"EgEqHvJN0"}
+
+            data: {"id":"chatcmpl-64260435-4301-4b64-a9bc-9e50e267c30d","object":"chat.completion.chunk","created":1789324448,"model":"gpt-5-search-api-2025-10-14","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"annotations":[{"type":"url_citation","url_citation":{"end_index":417,"start_index":324,"title":"Trump downplays the need to check AI development and says he doesn't want to cede edge to China","url":"https://apnews.com/article/9df0ebb4c1b0619aa0f88057b5a1092d?utm_source=openai"}}]},"finish_reason":"stop"}],"usage":null,"obfuscation":"y0EYklluH6"}
+
+            data: {"id":"chatcmpl-64260435-4301-4b64-a9bc-9e50e267c30d","object":"chat.completion.chunk","created":1789324448,"model":"gpt-5-search-api-2025-10-14","service_tier":"default","system_fingerprint":null,"choices":[],"usage":{"prompt_tokens":16499,"completion_tokens":114,"total_tokens":16613,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}},"obfuscation":"pS"}
+
+            data: [DONE]
+
+        headers:
+            Access-Control-Expose-Headers:
+                - X-Request-ID
+                - CF-Ray
+                - CF-Ray
+            Alt-Svc:
+                - h3=":443"; ma=86400
+            Cf-Cache-Status:
+                - DYNAMIC
+            Cf-Ray:
+                - a3a93e6bfbde3e16-BOM
+            Content-Type:
+                - text/event-stream; charset=utf-8
+            Date:
+                - Sun, 13 Sep 2026 18:34:08 GMT
+            Openai-Organization:
+                - fluxai-ql6txb
+            Openai-Processing-Ms:
+                - "4351"
+            Openai-Project:
+                - proj_TyVyJP3AZBjMBnVymwmezBd2
+            Openai-Version:
+                - "2020-10-01"
+            Server:
+                - cloudflare
+            Set-Cookie:
+                - __cf_bm=oekVvhUnuemsU1ViJYuSppwDd09qp_q11FW2qkdsPmo-1789324443.5139418-1.0.1.1-5.LN44uWh5qOAm0d1AKzUe_TC8UeLJ5mJfvy5G_s11VSDx53zGtNCsRDCQLYGyo1cCBNeHVGPAWUVCer85vOuIVeVAmJejuQeMHgrSFcOP.oeZPz767.94a1SYbiAgg.; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun, 13 Sep 2026 19:04:08 GMT
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains; preload
+            X-Content-Type-Options:
+                - nosniff
+            X-Openai-Proxy-Wasm:
+                - v0.1
+            X-Ratelimit-Limit-Requests:
+                - "500"
+            X-Ratelimit-Limit-Tokens:
+                - "45000"
+            X-Ratelimit-Remaining-Requests:
+                - "499"
+            X-Ratelimit-Remaining-Tokens:
+                - "44980"
+            X-Ratelimit-Reset-Requests:
+                - 120ms
+            X-Ratelimit-Reset-Tokens:
+                - 25ms
+            X-Request-Id:
+                - req_153cba59761c4dfcab14a7a40c0fcd3f
+        status: 200 OK
+        code: 200
+        duration: 4.98808625s
