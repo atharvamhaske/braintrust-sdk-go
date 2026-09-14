@@ -25,10 +25,14 @@
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/genkit (Firebase Genkit)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino (CloudWeGo Eino)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo (LangChainGo)
+//   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a (A2A protocol)
 //   - github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare (Cloudflare Workers AI)
 package all
 
 import (
+	// A2A protocol (github.com/a2aproject/a2a-go)
+	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a"
+
 	// OpenAI official SDK (github.com/openai/openai-go)
 	_ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/openai"
 

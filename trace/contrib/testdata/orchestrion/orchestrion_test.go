@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/a2aproject/a2a-go/a2a"
+	"github.com/a2aproject/a2a-go/a2aclient"
+	"github.com/a2aproject/a2a-go/a2asrv"
+	"github.com/a2aproject/a2a-go/a2asrv/eventqueue"
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
 	cf "github.com/cloudflare/cloudflare-go/v7"
@@ -117,6 +123,76 @@ func TestOpenAIV2(t *testing.T) {
 		}
 	}
 	require.True(t, found, "Expected Chat Completion span")
+}
+
+// TestA2A verifies that orchestrion auto-injects Braintrust tracing for the
+// A2A Go SDK, using the *ellipsis/spread* call form for both the client and
+// server constructors (existingOpts... rather than individual literal args).
+// This form is what broke the original wrap-expression-based aspects (fixed
+// by switching to Orchestrion's append-args advice, which handles spread
+// calls natively) - a literal-args-only test would not have caught it.
+func TestA2A(t *testing.T) {
+	exporter := setupOtel(t)
+
+	existingHandlerOpts := []a2asrv.RequestHandlerOption{}
+	handler := a2asrv.NewHandler(a2aEchoExecutor{}, existingHandlerOpts...)
+	mux := http.NewServeMux()
+	mux.Handle("/invoke", a2asrv.NewJSONRPCHandler(handler))
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	existingClientOpts := []a2aclient.FactoryOption{}
+	client, err := a2aclient.NewFromEndpoints(context.Background(), []a2a.AgentInterface{
+		{Transport: a2a.TransportProtocolJSONRPC, URL: server.URL + "/invoke"},
+	}, existingClientOpts...)
+	require.NoError(t, err)
+	defer func() { _ = client.Destroy() }()
+
+	_, err = client.SendMessage(context.Background(), &a2a.MessageSendParams{
+		Message: a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: "hello"}),
+	})
+	require.NoError(t, err)
+
+	// Direct factory creation must be instrumented too, not only the two
+	// convenience constructors above.
+	existingFactoryOpts := []a2aclient.FactoryOption{}
+	factory := a2aclient.NewFactory(existingFactoryOpts...)
+	factoryClient, err := factory.CreateFromEndpoints(context.Background(), []a2a.AgentInterface{
+		{Transport: a2a.TransportProtocolJSONRPC, URL: server.URL + "/invoke"},
+	})
+	require.NoError(t, err)
+	defer func() { _ = factoryClient.Destroy() }()
+
+	_, err = factoryClient.SendMessage(context.Background(), &a2a.MessageSendParams{
+		Message: a2a.NewMessage(a2a.MessageRoleUser, a2a.TextPart{Text: "hello from factory"}),
+	})
+	require.NoError(t, err)
+
+	spans := exporter.Flush()
+	require.NotEmpty(t, spans, "No spans created - orchestrion did not inject tracing for A2A")
+
+	t.Logf("SUCCESS: %d span(s) created for A2A", len(spans))
+	for _, span := range spans {
+		t.Logf("  - %s", span.Name())
+	}
+
+	clientSpanCount := 0
+	for _, span := range spans {
+		if span.Name() == "a2a.SendMessage" && span.Metadata()["role"] == "client" {
+			clientSpanCount++
+		}
+	}
+	require.Equal(t, 2, clientSpanCount, "expected direct constructor and factory-created clients to be instrumented")
+}
+
+type a2aEchoExecutor struct{}
+
+func (a2aEchoExecutor) Execute(ctx context.Context, reqCtx *a2asrv.RequestContext, q eventqueue.Queue) error {
+	return q.Write(ctx, a2a.NewMessage(a2a.MessageRoleAgent, a2a.TextPart{Text: "hi"}))
+}
+
+func (a2aEchoExecutor) Cancel(_ context.Context, _ *a2asrv.RequestContext, _ eventqueue.Queue) error {
+	return nil
 }
 
 // TestAnthropic verifies that orchestrion auto-injects the Braintrust middleware

@@ -49,6 +49,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/blakesmith/ar v0.0.0-20190502131153-809d4375e1fb // indirect
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a v0.0.0 // indirect
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk v0.14.0 // indirect
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic v0.14.0 // indirect
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime v0.14.0 // indirect
@@ -187,6 +188,7 @@ require (
 	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/adk v0.4.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
@@ -197,12 +199,14 @@ require (
 )
 
 require (
+	github.com/a2aproject/a2a-go v0.3.15
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/all v0.0.0
 	github.com/cloudflare/cloudflare-go/v7 v7.10.0
 )
 
 replace (
 	github.com/braintrustdata/braintrust-sdk-go => ../../../..
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a => ../../a2a
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk => ../../adk
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/all => ../../all
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/anthropic => ../../anthropic

@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://datadoghq.dev/orchestrion/schema.json
+meta:
+  name: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
+  description: Auto-instrumentation for the official A2A (Agent2Agent) Go SDK with Braintrust tracing
+
+# append-args appends to the matched call's variadic parameter regardless of
+# whether the call site passes individual values or spreads an existing
+# slice with `...` - unlike a hand-written wrap-expression reconstructing
+# the call, it does not need to special-case the ellipsis form.
+aspects:
+  - id: a2a-client-instrument
+    join-point:
+      one-of:
+        - function-call: github.com/a2aproject/a2a-go/a2aclient.NewFromCard
+        - function-call: github.com/a2aproject/a2a-go/a2aclient.NewFromEndpoints
+        - function-call: github.com/a2aproject/a2a-go/a2aclient.NewFactory
+    advice:
+      - append-args:
+          type: github.com/a2aproject/a2a-go/a2aclient.FactoryOption
+          values:
+            - imports:
+                tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
+                a2aclient: github.com/a2aproject/a2a-go/a2aclient
+              template: a2aclient.WithInterceptors(tracea2a.NewClientInterceptor())
+
+  - id: a2a-server-instrument
+    join-point:
+      function-call: github.com/a2aproject/a2a-go/a2asrv.NewHandler
+    advice:
+      - append-args:
+          type: github.com/a2aproject/a2a-go/a2asrv.RequestHandlerOption
+          values:
+            - imports:
+                tracea2a: github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a
+              template: tracea2a.InstrumentServer()
