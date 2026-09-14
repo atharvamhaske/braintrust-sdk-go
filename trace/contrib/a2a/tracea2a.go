@@ -428,7 +428,10 @@ func aggregateOutput(events []any) any {
 		return nil
 	}
 	if len(events) == 1 {
-		return events[0]
+		switch events[0].(type) {
+		case *a2a.Message, *a2a.Task:
+			return events[0]
+		}
 	}
 
 	var task *a2a.Task

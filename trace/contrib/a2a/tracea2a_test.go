@@ -443,6 +443,23 @@ func TestCallMetaCarrier_SetReplacesExistingValue(t *testing.T) {
 	assert.False(t, hasMixedCaseKey)
 }
 
+func TestAggregateOutput_LoneStatusUpdateBecomesTask(t *testing.T) {
+	status := &a2a.TaskStatusUpdateEvent{
+		TaskID:    "task-1",
+		ContextID: "context-1",
+		Status:    a2a.TaskStatus{State: a2a.TaskStateCompleted},
+		Final:     true,
+	}
+
+	output := aggregateOutput([]any{status})
+
+	task, ok := output.(*a2a.Task)
+	require.True(t, ok, "lone status update must use the normalized Task output shape")
+	require.Equal(t, status.TaskID, task.ID)
+	require.Equal(t, status.ContextID, task.ContextID)
+	require.Equal(t, status.Status, task.Status)
+}
+
 func TestIsTerminalEvent_TaskState(t *testing.T) {
 	tests := []struct {
 		state    a2a.TaskState
