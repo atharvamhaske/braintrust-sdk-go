@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -49,6 +50,7 @@ func main() {
 		{"chat-streaming", chatStreaming},
 		{"chat-tools", chatTools},
 		{"chat-streaming-tools", chatStreamingTools},
+		{"chat-web-search-streaming", chatWebSearchStreaming},
 		{"chat-system-temperature", chatSystemTemperature},
 		{"chat-vision", chatVision},
 		{"embeddings", embeddingsExample},
@@ -253,6 +255,43 @@ func chatStreamingTools(ctx context.Context, client openai.Client) error {
 	if name != "" {
 		fmt.Printf("  Streamed tool call: %s(%s)\n", name, args)
 	}
+	return nil
+}
+
+func chatWebSearchStreaming(ctx context.Context, client openai.Client) error {
+	stream := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("What is a notable news headline from today? Include a source URL."),
+		},
+		Model:            "gpt-5-search-api",
+		WebSearchOptions: openai.ChatCompletionNewParamsWebSearchOptions{},
+		StreamOptions: openai.ChatCompletionStreamOptionsParam{
+			IncludeUsage: openai.Bool(true),
+		},
+	})
+
+	// openai-go's typed ChatCompletionChunkChoiceDelta doesn't declare an
+	// Annotations field yet, even though OpenAI's API sends url_citation
+	// annotations in a delta chunk. Read the raw JSON to see them; the
+	// tracer does the same, since it parses the wire format directly.
+	var citationCount int
+	for stream.Next() {
+		chunk := stream.Current()
+		var raw struct {
+			Choices []struct {
+				Delta struct {
+					Annotations []any `json:"annotations"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(chunk.RawJSON()), &raw); err == nil && len(raw.Choices) > 0 {
+			citationCount += len(raw.Choices[0].Delta.Annotations)
+		}
+	}
+	if err := stream.Err(); err != nil {
+		return err
+	}
+	fmt.Printf("  %d URL citation(s)\n", citationCount)
 	return nil
 }
 
