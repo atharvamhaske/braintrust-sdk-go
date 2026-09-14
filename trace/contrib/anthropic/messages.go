@@ -166,8 +166,8 @@ func (mt *messagesTracer) parseStreamingResponse(span trace.Span, body io.Reader
 	if model := accumulator.Model(); model != "" {
 		mt.metadata["model"] = model
 	}
-	// message_start carries the response-side context_management.applied_edits
-	// for streamed requests, the same information handleMessageResponse reads
+	// The stream's message events carry the response-side context_management.applied_edits,
+	// the same information handleMessageResponse reads
 	// from the non-streaming response body. Merge it under the same key as the
 	// request-side config so both live together.
 	if appliedEdits, exists := accumulator.ContextManagement()["applied_edits"]; exists {

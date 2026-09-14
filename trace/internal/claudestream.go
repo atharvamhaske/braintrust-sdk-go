@@ -38,9 +38,7 @@ func (a *ClaudeStreamAccumulator) Add(event map[string]any) bool {
 				a.model = model
 			}
 			a.mergeUsage(message["usage"])
-			if contextManagement, ok := message["context_management"].(map[string]any); ok {
-				a.contextManagement = contextManagement
-			}
+			a.captureContextManagement(message)
 		}
 	case "content_block_start":
 		index, ok := claudeEventIndex(event)
@@ -60,6 +58,7 @@ func (a *ClaudeStreamAccumulator) Add(event map[string]any) bool {
 			}
 		}
 		a.mergeUsage(event["usage"])
+		a.captureContextManagement(event)
 	}
 	return false
 }
@@ -164,11 +163,17 @@ func (a *ClaudeStreamAccumulator) StopReason() any { return a.stopReason }
 // Model returns the model resolved from message_start, if present.
 func (a *ClaudeStreamAccumulator) Model() string { return a.model }
 
-// ContextManagement returns the context_management field from message_start,
-// if present. This reports which context-editing strategies actually fired
-// during the request (e.g. applied_edits), distinct from the request-side
+// ContextManagement returns the context_management field from the stream's
+// message events, if present. This reports which context-editing strategies
+// actually fired during the request (e.g. applied_edits), distinct from the request-side
 // context_management config captured before the stream starts.
 func (a *ClaudeStreamAccumulator) ContextManagement() map[string]any { return a.contextManagement }
+
+func (a *ClaudeStreamAccumulator) captureContextManagement(event map[string]any) {
+	if contextManagement, ok := event["context_management"].(map[string]any); ok {
+		a.contextManagement = contextManagement
+	}
+}
 
 func (a *ClaudeStreamAccumulator) mergeUsage(value any) {
 	usage, ok := value.(map[string]any)

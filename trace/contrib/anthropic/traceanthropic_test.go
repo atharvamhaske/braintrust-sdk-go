@@ -547,6 +547,115 @@ func TestMiddlewareIntegrationStreaming(t *testing.T) {
 
 }
 
+func TestContextManagement(t *testing.T) {
+	client, exporter := setUpTest(t)
+
+	timer := oteltest.NewTimer()
+	resp, err := client.Beta.Messages.New(t.Context(), contextManagementParams())
+	timeRange := timer.Tick()
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.NotEmpty(t, resp.ContextManagement.AppliedEdits)
+
+	span := exporter.FlushOne()
+	assertSpanValid(t, span, timeRange)
+	assertContextManagementMetadata(t, span.Metadata())
+}
+
+func TestContextManagementStreaming(t *testing.T) {
+	client, exporter := setUpTest(t)
+
+	timer := oteltest.NewTimer()
+	stream := client.Beta.Messages.NewStreaming(t.Context(), contextManagementParams())
+	var eventCount int
+	for stream.Next() {
+		eventCount++
+	}
+	require.NoError(t, stream.Err())
+	require.Positive(t, eventCount)
+	timeRange := timer.Tick()
+
+	span := exporter.FlushOne()
+	assertStreamingSpanValid(t, span, timeRange)
+	assertContextManagementMetadata(t, span.Metadata())
+}
+
+func contextManagementParams() anthropic.BetaMessageNewParams {
+	messages := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("Check the weather in two cities.")),
+	}
+	toolCalls := []struct {
+		id   string
+		city string
+	}{
+		{id: "toolu_test_weather_0", city: "Paris"},
+		{id: "toolu_test_weather_1", city: "London"},
+	}
+	for _, toolCall := range toolCalls {
+		messages = append(messages, anthropic.BetaMessageParam{
+			Role: anthropic.BetaMessageParamRoleAssistant,
+			Content: []anthropic.BetaContentBlockParamUnion{
+				anthropic.NewBetaToolUseBlock(toolCall.id, map[string]any{"location": toolCall.city}, "get_weather"),
+			},
+		})
+		toolResult := anthropic.NewBetaToolResultBlock(toolCall.id)
+		toolResult.OfToolResult.Content = []anthropic.BetaToolResultBlockParamContentUnion{{
+			OfText: &anthropic.BetaTextBlockParam{Text: strings.Repeat("Historical hourly weather data. ", 20)},
+		}}
+		messages = append(messages, anthropic.NewBetaUserMessage(toolResult))
+	}
+	messages = append(messages, anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("Summarize the results briefly.")))
+
+	return anthropic.BetaMessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 64,
+		Betas:     []anthropic.AnthropicBeta{anthropic.AnthropicBetaContextManagement2025_06_27},
+		ContextManagement: anthropic.BetaContextManagementConfigParam{
+			Edits: []anthropic.BetaContextManagementConfigEditUnionParam{{
+				OfClearToolUses20250919: &anthropic.BetaClearToolUses20250919EditParam{
+					Trigger: anthropic.BetaClearToolUses20250919EditTriggerUnionParam{
+						OfInputTokens: &anthropic.BetaInputTokensTriggerParam{Value: 20},
+					},
+					ClearAtLeast: anthropic.BetaInputTokensClearAtLeastParam{Value: 5},
+					Keep:         anthropic.BetaToolUsesKeepParam{Value: 1},
+				},
+			}},
+		},
+		Messages: messages,
+		Tools: []anthropic.BetaToolUnionParam{
+			anthropic.BetaToolUnionParamOfTool(anthropic.BetaToolInputSchemaParam{
+				Properties: map[string]any{"location": map[string]any{"type": "string"}},
+			}, "get_weather"),
+		},
+	}
+}
+
+func assertContextManagementMetadata(t *testing.T, metadata map[string]any) {
+	t.Helper()
+
+	contextManagement, ok := metadata["context_management"].(map[string]any)
+	require.True(t, ok)
+
+	edits, ok := contextManagement["edits"].([]any)
+	require.True(t, ok)
+	require.Len(t, edits, 1)
+	edit, ok := edits[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "clear_tool_uses_20250919", edit["type"])
+	assert.Equal(t, map[string]any{"type": "input_tokens", "value": float64(20)}, edit["trigger"])
+	assert.Equal(t, map[string]any{"type": "tool_uses", "value": float64(1)}, edit["keep"])
+
+	appliedEdits, ok := contextManagement["applied_edits"].([]any)
+	require.True(t, ok)
+	require.Len(t, appliedEdits, 1)
+	appliedEdit, ok := appliedEdits[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "clear_tool_uses_20250919", appliedEdit["type"])
+	assert.Equal(t, float64(1), appliedEdit["cleared_tool_uses"])
+	assert.Positive(t, appliedEdit["cleared_input_tokens"])
+}
+
 // setUpTest is a helper function that sets up a new tracer provider and VCR for each test.
 // It returns an anthropic client configured with VCR and an exporter.
 func setUpTest(t *testing.T) (anthropic.Client, *oteltest.Exporter) {
