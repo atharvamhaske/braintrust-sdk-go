@@ -272,7 +272,7 @@ func TestCloudflare(t *testing.T) {
 
 	// Create Cloudflare client WITHOUT middleware - orchestrion should inject it
 	client := cf.NewClient(
-		cfoption.WithAPIToken(cloudflareAPIToken()),
+		cfoption.WithAPIToken(envOrDefault("CLOUDFLARE_API_TOKEN", "dummy-key-for-vcr")),
 		cfoption.WithHTTPClient(httpClient),
 		// NOTE: No WithMiddleware here! Orchestrion should inject it.
 	)
@@ -280,7 +280,7 @@ func TestCloudflare(t *testing.T) {
 	_, err := client.AI.Run(context.Background(), "@cf/meta/llama-3.1-8b-instruct-fast", cfai.AIRunParams{
 		// Workers AI puts the account ID in the URL path, so VCR cassette
 		// matching needs this to be the same placeholder used when recording.
-		AccountID: cf.F(cloudflareAccountID()),
+		AccountID: cf.F(envOrDefault("CLOUDFLARE_ACCOUNT_ID", "dummy-account-id-for-replay")),
 		Body: cfai.AIRunParamsBodyTextGeneration{
 			Messages: cf.F([]cfai.AIRunParamsBodyTextGenerationMessage{
 				{
@@ -534,20 +534,14 @@ func setupOtel(t *testing.T) *oteltest.Exporter {
 	return exporter
 }
 
-// cloudflareAccountID returns CLOUDFLARE_ACCOUNT_ID if set (needed to record
-// a real cassette), or the placeholder value the committed cassette was
-// scrubbed to otherwise. Workers AI puts the account ID in the URL path, so
-// VCR's URL-based matching needs the same value at record and replay time.
-func cloudflareAPIToken() string {
-	if token := os.Getenv("CLOUDFLARE_API_TOKEN"); token != "" {
-		return token
+// envOrDefault returns the named env var if set (needed to record a real
+// cassette), or fallback otherwise. Used for CLOUDFLARE_API_TOKEN and
+// CLOUDFLARE_ACCOUNT_ID: Workers AI puts the account ID in the URL path, so
+// VCR's URL-based matching needs the same value at record and replay time,
+// and the committed cassette was scrubbed to the placeholder fallback.
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
 	}
-	return "dummy-key-for-vcr"
-}
-
-func cloudflareAccountID() string {
-	if id := os.Getenv("CLOUDFLARE_ACCOUNT_ID"); id != "" {
-		return id
-	}
-	return "dummy-account-id-for-replay"
+	return fallback
 }

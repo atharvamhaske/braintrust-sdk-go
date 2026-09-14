@@ -22,6 +22,7 @@ var tracer = otel.Tracer("cloudflare-examples")
 
 const chatModel = "@cf/meta/llama-3.1-8b-instruct-fast"
 const embeddingModel = "@cf/baai/bge-base-en-v1.5"
+const classificationModel = "@cf/huggingface/distilbert-sst-2-int8"
 
 func main() {
 	tp := trace.NewTracerProvider()
@@ -61,6 +62,39 @@ func main() {
 	}
 	fmt.Printf("Text generation -> %+v\n", *chatResp)
 
+	toolResp, err := client.AI.Run(ctx, chatModel, ai.AIRunParams{
+		AccountID: cf.F(accountID),
+		Body: ai.AIRunParamsBodyTextGeneration{
+			Messages: cf.F([]ai.AIRunParamsBodyTextGenerationMessage{
+				{
+					Role:    cf.F("user"),
+					Content: cf.F[ai.AIRunParamsBodyTextGenerationMessagesContentUnion](shared.UnionString("What's the weather in Paris?")),
+				},
+			}),
+			Tools: cf.F([]ai.AIRunParamsBodyTextGenerationToolUnion{
+				ai.AIRunParamsBodyTextGenerationTool{
+					Type:        cf.F("function"),
+					Name:        cf.F("get_weather"),
+					Description: cf.F("Get the current weather for a location"),
+					Parameters: cf.F[any](map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"location": map[string]any{"type": "string"},
+						},
+						"required": []string{"location"},
+					}),
+				},
+			}),
+		},
+	})
+	if err != nil {
+		log.Fatalf("Text generation with tools: %v", err)
+	}
+	fmt.Printf("Text generation with tools -> %+v\n", *toolResp)
+
+	// Text and multimodal embeddings return the identical {data, shape}
+	// response shape, so both are covered by the same tracer code path;
+	// see trace/contrib/cloudflare/airun.go's tagEmbeddings.
 	embedResp, err := client.AI.Run(ctx, embeddingModel, ai.AIRunParams{
 		AccountID: cf.F(accountID),
 		Body: ai.AIRunParamsBodyTextEmbeddings{
@@ -71,6 +105,17 @@ func main() {
 		log.Fatalf("Text embeddings: %v", err)
 	}
 	fmt.Printf("Text embeddings -> %+v\n", *embedResp)
+
+	classifyResp, err := client.AI.Run(ctx, classificationModel, ai.AIRunParams{
+		AccountID: cf.F(accountID),
+		Body: ai.AIRunParamsBodyTextClassification{
+			Text: cf.F("I love this product"),
+		},
+	})
+	if err != nil {
+		log.Fatalf("Text classification: %v", err)
+	}
+	fmt.Printf("Text classification -> %+v\n", *classifyResp)
 
 	fmt.Printf("View trace: %s\n", bt.Permalink(rootSpan))
 }

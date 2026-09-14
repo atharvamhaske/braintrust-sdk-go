@@ -45,26 +45,26 @@ interactions:
         trailer: {}
         content_length: -1
         uncompressed: true
-        body: '{"result":{"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"annotations":null,"audio":null,"content":"Hello. Is there something I can help you with or would you like to chat?","function_call":null,"reasoning":null,"refusal":null,"role":"assistant"},"routed_experts":null,"stop_reason":null,"token_ids":null}],"created":1789410640,"ec_transfer_params":null,"id":"chatcmpl-4a65db82-f7bf-4025-87be-534b292d21ac","kv_transfer_params":null,"metrics":null,"model":"@cf/meta/llama-3.1-8b-fast-v2","object":"chat.completion","prompt_logprobs":null,"prompt_text":null,"prompt_token_ids":null,"response":"Hello. Is there something I can help you with or would you like to chat?","service_tier":null,"tool_calls":[],"usage":{"prompt_tokens":37,"completion_tokens":18,"total_tokens":55,"prompt_tokens_details":{"cached_tokens":0},"neurons":0.7800076603889465}},"success":true,"errors":[],"messages":[]}'
+        body: '{"result":{"choices":[{"finish_reason":"stop","index":0,"logprobs":null,"message":{"annotations":null,"audio":null,"content":"Hello! How can I assist you today?","function_call":null,"reasoning":null,"refusal":null,"role":"assistant"},"routed_experts":null,"stop_reason":null,"token_ids":null}],"created":1789413703,"ec_transfer_params":null,"id":"chatcmpl-6a4f0b51-5dc8-48fc-800c-03ba1b546b6a","kv_transfer_params":null,"metrics":null,"model":"@cf/meta/llama-3.1-8b-fast-v2","object":"chat.completion","prompt_logprobs":null,"prompt_text":null,"prompt_token_ids":null,"response":"Hello! How can I assist you today?","service_tier":null,"tool_calls":[],"usage":{"prompt_tokens":37,"completion_tokens":10,"total_tokens":47,"prompt_tokens_details":{"cached_tokens":0},"neurons":0.5010650753974915}},"success":true,"errors":[],"messages":[]}'
         headers:
             Api-Version:
                 - 2026-09-25.epoch
             Cf-Ai-Neurons:
-                - "0.78"
+                - "0.50"
             Cf-Ai-Req-Id:
-                - 4a65db82-f7bf-4025-87be-534b292d21ac
+                - 6a4f0b51-5dc8-48fc-800c-03ba1b546b6a
             Cf-Auditlog-Id:
-                - 01a0a12f-7ecc-7c5f-ae0f-a67876434dfc
+                - 01a0a15e-3ccf-7044-b9cb-7bf53a9050ec
             Cf-Ray:
-                - a3b176d128123d18-BOM
+                - a3b1c19acac6419f-BOM
             Content-Type:
                 - application/json
             Date:
-                - Mon, 14 Sep 2026 18:30:40 GMT
+                - Mon, 14 Sep 2026 19:21:43 GMT
             Server:
                 - cloudflare
             Set-Cookie:
-                - __cf_bm=PPjijJMlLs2qwW9RMXKLy671SGRz.0yKHV9oNY6wckk-1789410639.5481958-1.0.1.1-nBxz9auC3NrAseKwTgaMPz1AKGWBJFecypm2SgKqyw8.Hn_QCTIU6TG8x8.rlAUgs8FWwib9nlyab.EusA9KRByaDk.X0JZiIGzkfZDKKpzOBFMrioxmDfo.Lu.8sdjn; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.cloudflare.com; Expires=Mon, 14 Sep 2026 19:00:40 GMT
+                - __cf_bm=5pKZpK7u3Y6Lf.0zQ3ftt2Uol1c8b32Gc5Azh3A97k4-1789413702.8510628-1.0.1.1-UgTotINjHPB9nGr.eBF72cJzqAvBCZj9EoQxJW8g_mJ1RAu7IIv05YJ40J4sf5vie47f4FI4sp92.mQs8mNUApcAfLwANrEqThmW7kg7jbk4tyl5nwxOJf0eEtbrII5D; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.cloudflare.com; Expires=Mon, 14 Sep 2026 19:51:43 GMT
         status: 200 OK
         code: 200
-        duration: 1.359790625s
+        duration: 1.101076291s
