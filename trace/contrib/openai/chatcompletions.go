@@ -75,6 +75,8 @@ func (ct *chatCompletionsTracer) StartSpan(ctx context.Context, t time.Time, req
 		"safety_identifier",
 		"functions",
 		"function_call",
+		"web_search_options",
+		"prediction",
 	}
 
 	// handle simple fields here.
@@ -177,6 +179,7 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 	var role *string
 	var content string
 	var toolCalls []interface{}
+	var annotations []interface{}
 	var finishReason interface{}
 
 	for _, result := range allResults {
@@ -207,6 +210,12 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 			// Handle content aggregation
 			if deltaContent, ok := delta["content"].(string); ok {
 				content += deltaContent
+			}
+
+			// Handle URL citation annotations (arrives whole in one chunk,
+			// not built up token-by-token like content).
+			if deltaAnnotations, ok := delta["annotations"].([]interface{}); ok {
+				annotations = append(annotations, deltaAnnotations...)
 			}
 
 			// Handle tool_calls aggregation (similar to Python SDK logic)
@@ -266,13 +275,19 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 		finalToolCalls = toolCalls
 	}
 
+	var finalAnnotations interface{}
+	if len(annotations) > 0 {
+		finalAnnotations = annotations
+	}
+
 	return []map[string]interface{}{
 		{
 			"index": 0,
 			"message": map[string]interface{}{
-				"role":       finalRole,
-				"content":    content,
-				"tool_calls": finalToolCalls,
+				"role":        finalRole,
+				"content":     content,
+				"tool_calls":  finalToolCalls,
+				"annotations": finalAnnotations,
 			},
 			"logprobs":      nil,
 			"finish_reason": finishReason,

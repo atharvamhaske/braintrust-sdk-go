@@ -1,12 +1,14 @@
 package openai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/shared"
@@ -1233,4 +1235,104 @@ func TestChatCompletionsPromptCacheAndSafetyFields(t *testing.T) {
 	metadata := ts.Metadata()
 	assert.Equal("conversation-123", metadata["prompt_cache_key"], "prompt_cache_key should be captured in metadata")
 	assert.Equal("user-456", metadata["safety_identifier"], "safety_identifier should be captured in metadata")
+}
+
+// TestChatCompletionsWebSearchAndPredictionMetadata is a unit test on the
+// tracer's request parsing directly (no VCR/network): web_search_options
+// requires a search-preview model and prediction requires specific model
+// support, so this exercises StartSpan against a marshaled request body
+// instead of recording a live call.
+func TestChatCompletionsWebSearchAndPredictionMetadata(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	tp, exporter := oteltest.Setup(t)
+	ct := newChatCompletionsTracer(&middlewareConfig{tracerProvider: tp})
+
+	params := openai.ChatCompletionNewParams{
+		Model: "gpt-4o-search-preview",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("What's the weather in San Francisco?"),
+		},
+		WebSearchOptions: openai.ChatCompletionNewParamsWebSearchOptions{
+			UserLocation: openai.ChatCompletionNewParamsWebSearchOptionsUserLocation{
+				Approximate: openai.ChatCompletionNewParamsWebSearchOptionsUserLocationApproximate{
+					Country: openai.String("US"),
+					City:    openai.String("San Francisco"),
+				},
+			},
+		},
+		Prediction: openai.ChatCompletionPredictionContentParam{
+			Content: openai.ChatCompletionPredictionContentContentUnionParam{
+				OfString: openai.String("predicted text"),
+			},
+		},
+	}
+	body, err := json.Marshal(params)
+	require.NoError(err)
+
+	_, span, err := ct.StartSpan(context.Background(), time.Now(), bytes.NewReader(body))
+	require.NoError(err)
+	span.End()
+
+	ts := exporter.FlushOne()
+	metadata := ts.Metadata()
+
+	webSearchOptions, ok := metadata["web_search_options"].(map[string]any)
+	require.True(ok, "web_search_options should be captured in metadata")
+	userLocation, ok := webSearchOptions["user_location"].(map[string]any)
+	require.True(ok)
+	approximate, ok := userLocation["approximate"].(map[string]any)
+	require.True(ok)
+	assert.Equal("US", approximate["country"])
+	assert.Equal("San Francisco", approximate["city"])
+
+	prediction, ok := metadata["prediction"].(map[string]any)
+	require.True(ok, "prediction should be captured in metadata")
+	assert.Equal("predicted text", prediction["content"])
+}
+
+// TestOpenAIChatCompletionsStreamingWebSearchAnnotations verifies that URL
+// citation annotations, which OpenAI sends whole in a single delta chunk
+// rather than incrementally like content, survive streaming aggregation.
+func TestOpenAIChatCompletionsStreamingWebSearchAnnotations(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	require := require.New(t)
+
+	params := openai.ChatCompletionNewParams{
+		Model: "gpt-5-search-api",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("What is a notable news headline from today? Include a source URL."),
+		},
+		WebSearchOptions: openai.ChatCompletionNewParamsWebSearchOptions{},
+		StreamOptions: openai.ChatCompletionStreamOptionsParam{
+			IncludeUsage: openai.Bool(true),
+		},
+	}
+
+	stream := client.Chat.Completions.NewStreaming(context.Background(), params)
+	for stream.Next() {
+	}
+	require.NoError(stream.Err())
+
+	ts := exporter.FlushOne()
+	output, ok := ts.Output().([]any)
+	require.True(ok)
+	require.NotEmpty(output)
+
+	choice, ok := output[0].(map[string]any)
+	require.True(ok)
+	message, ok := choice["message"].(map[string]any)
+	require.True(ok)
+
+	annotations, ok := message["annotations"].([]any)
+	require.True(ok, "annotations should survive streaming aggregation")
+	require.NotEmpty(annotations)
+
+	annotation, ok := annotations[0].(map[string]any)
+	require.True(ok)
+	require.Equal("url_citation", annotation["type"])
+	urlCitation, ok := annotation["url_citation"].(map[string]any)
+	require.True(ok)
+	require.NotEmpty(urlCitation["url"])
 }
