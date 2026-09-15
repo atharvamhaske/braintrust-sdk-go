@@ -53,6 +53,7 @@ func main() {
 		{"chat-tools", chatTools},
 		{"chat-streaming-tools", chatStreamingTools},
 		{"responses", responsesAPI},
+		{"responses-multi-turn", responsesMultiTurn},
 		{"responses-structured-output", responsesStructuredOutput},
 		{"responses-streaming", responsesStreaming},
 		{"conversations", conversationsAPI},
@@ -274,6 +275,32 @@ func responsesAPI(ctx context.Context, client openai.Client) error {
 		output = output[:50] + "..."
 	}
 	fmt.Printf("  %s\n", output)
+	return nil
+}
+
+// responsesMultiTurn shows the Responses API's server-side conversation
+// state: previous_response_id tells OpenAI to include prior turn context
+// without resending message history, and metadata.previous_response_id on
+// the second span links the two spans as one conversation in Braintrust.
+func responsesMultiTurn(ctx context.Context, client openai.Client) error {
+	first, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Input: responses.ResponseNewParamsInputUnion{OfString: openai.String("My favorite topping is pineapple.")},
+		Model: openai.ChatModelGPT4oMini,
+	})
+	if err != nil {
+		return err
+	}
+
+	second, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Input:              responses.ResponseNewParamsInputUnion{OfString: openai.String("What's my favorite topping?")},
+		Model:              openai.ChatModelGPT4oMini,
+		PreviousResponseID: openai.String(first.ID),
+		Include:            []responses.ResponseIncludable{responses.ResponseIncludableMessageOutputTextLogprobs},
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("  %s\n", second.OutputText())
 	return nil
 }
 
