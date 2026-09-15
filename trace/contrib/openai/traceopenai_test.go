@@ -220,6 +220,40 @@ func TestOpenAIResponsesPromptCacheAndSafetyFields(t *testing.T) {
 	assert.Equal("user-456", metadata["safety_identifier"], "safety_identifier should be captured in metadata")
 }
 
+func TestOpenAIResponsesPreviousResponseIDAndInclude(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	first, err := client.Responses.New(context.Background(), responses.ResponseNewParams{
+		Input: responses.ResponseNewParamsInputUnion{OfString: openai.String("My name is Ada.")},
+		Model: testModel,
+	})
+	require.NoError(err)
+	require.NotNil(first)
+	exporter.FlushOne()
+
+	params := responses.ResponseNewParams{
+		Input:              responses.ResponseNewParamsInputUnion{OfString: openai.String("What is my name?")},
+		Model:              testModel,
+		PreviousResponseID: openai.String(first.ID),
+		Include:            []responses.ResponseIncludable{responses.ResponseIncludableMessageOutputTextLogprobs},
+	}
+
+	timer := oteltest.NewTimer()
+	resp, err := client.Responses.New(context.Background(), params)
+	timeRange := timer.Tick()
+	require.NoError(err)
+	require.NotNil(resp)
+
+	ts := exporter.FlushOne()
+	assertSpanValid(t, ts, timeRange)
+
+	metadata := ts.Metadata()
+	assert.Equal(first.ID, metadata["previous_response_id"], "previous_response_id should be captured in metadata")
+	assert.Equal([]any{"message.output_text.logprobs"}, metadata["include"], "include should be captured in metadata")
+}
+
 func TestOpenAIResponsesStreamingClose(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	require := require.New(t)

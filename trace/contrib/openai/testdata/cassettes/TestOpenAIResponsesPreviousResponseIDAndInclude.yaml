@@ -1,0 +1,501 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 49
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"input":"My name is Ada.","model":"gpt-4o-mini"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://api.openai.com/v1/responses
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: -1
+        uncompressed: true
+        body: |-
+            {
+              "id": "resp_07e58bfcc5dcc6a9006aa9773a57bc87d29cfba77e80f1e146",
+              "object": "response",
+              "created_at": 1789491002,
+              "status": "completed",
+              "background": false,
+              "billing": {
+                "payer": "developer"
+              },
+              "completed_at": 1789491005,
+              "error": null,
+              "frequency_penalty": 0.0,
+              "incomplete_details": null,
+              "instructions": null,
+              "max_output_tokens": null,
+              "max_tool_calls": null,
+              "model": "gpt-4o-mini-2024-07-18",
+              "moderation": null,
+              "output": [
+                {
+                  "id": "msg_07e58bfcc5dcc6a9006aa9773d06a887d2af986547dbec253d",
+                  "type": "message",
+                  "status": "completed",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "annotations": [],
+                      "logprobs": [],
+                      "text": "Nice to meet you, Ada! How can I assist you today?"
+                    }
+                  ],
+                  "role": "assistant"
+                }
+              ],
+              "parallel_tool_calls": true,
+              "presence_penalty": 0.0,
+              "previous_response_id": null,
+              "prompt_cache_key": null,
+              "prompt_cache_retention": "in_memory",
+              "reasoning": {
+                "context": null,
+                "effort": null,
+                "summary": null
+              },
+              "safety_identifier": null,
+              "service_tier": "default",
+              "store": true,
+              "temperature": 1.0,
+              "text": {
+                "format": {
+                  "type": "text"
+                },
+                "verbosity": "medium"
+              },
+              "tool_choice": "auto",
+              "tool_usage": {
+                "image_gen": {
+                  "input_tokens": 0,
+                  "input_tokens_details": {
+                    "image_tokens": 0,
+                    "text_tokens": 0
+                  },
+                  "output_tokens": 0,
+                  "output_tokens_details": {
+                    "image_tokens": 0,
+                    "text_tokens": 0
+                  },
+                  "total_tokens": 0
+                },
+                "web_search": {
+                  "num_requests": 0
+                }
+              },
+              "tools": [],
+              "top_logprobs": 0,
+              "top_p": 1.0,
+              "truncation": "disabled",
+              "usage": {
+                "input_tokens": 12,
+                "input_tokens_details": {
+                  "cache_write_tokens": 0,
+                  "cached_tokens": 0
+                },
+                "output_tokens": 15,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 27
+              },
+              "user": null,
+              "metadata": {}
+            }
+        headers:
+            Access-Control-Expose-Headers:
+                - X-Request-ID
+                - CF-Ray
+                - CF-Ray
+            Alt-Svc:
+                - h3=":443"; ma=86400
+            Cf-Cache-Status:
+                - DYNAMIC
+            Cf-Ray:
+                - a3b920c4fa7a2738-BOM
+            Content-Type:
+                - application/json
+            Date:
+                - Tue, 15 Sep 2026 16:50:05 GMT
+            Openai-Organization:
+                - fluxai-ql6txb
+            Openai-Processing-Ms:
+                - "3030"
+            Openai-Project:
+                - proj_TyVyJP3AZBjMBnVymwmezBd2
+            Openai-Version:
+                - "2020-10-01"
+            Server:
+                - cloudflare
+            Set-Cookie:
+                - __cf_bm=XUtyKChcZzBd6xmY0iUPRIYzrSf7ZPS2ZyplCFCobBE-1789491001.1166618-1.0.1.1-hK6VgRXyq3b03nqUQAmrX8ZItGIUT8.Di7UJ3n_NsknS37pfpyzrPHtS7TExHbzdqyVjbJnJ0CpGShEgaGIzXUSAMu8gbwfSU6xBICZdcaxteBNGBkqDgANwMZ6f1ZXe; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Tue, 15 Sep 2026 17:20:05 GMT
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains; preload
+            X-Content-Type-Options:
+                - nosniff
+            X-Ratelimit-Limit-Requests:
+                - "5000"
+            X-Ratelimit-Limit-Tokens:
+                - "2000000"
+            X-Ratelimit-Remaining-Requests:
+                - "4999"
+            X-Ratelimit-Remaining-Tokens:
+                - "1999969"
+            X-Ratelimit-Reset-Requests:
+                - 12ms
+            X-Ratelimit-Reset-Tokens:
+                - 0s
+            X-Request-Id:
+                - req_143a3ef69986421f902ec48bf74f6a4e
+        status: 200 OK
+        code: 200
+        duration: 4.6299935s
+    - id: 1
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 174
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"previous_response_id":"resp_07e58bfcc5dcc6a9006aa9773a57bc87d29cfba77e80f1e146","include":["message.output_text.logprobs"],"input":"What is my name?","model":"gpt-4o-mini"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://api.openai.com/v1/responses
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: -1
+        uncompressed: true
+        body: |-
+            {
+              "id": "resp_07e58bfcc5dcc6a9006aa9773dc34c87d2a0a86f62d4865e4a",
+              "object": "response",
+              "created_at": 1789491005,
+              "status": "completed",
+              "background": false,
+              "billing": {
+                "payer": "developer"
+              },
+              "completed_at": 1789491007,
+              "error": null,
+              "frequency_penalty": 0.0,
+              "incomplete_details": null,
+              "instructions": null,
+              "max_output_tokens": null,
+              "max_tool_calls": null,
+              "model": "gpt-4o-mini-2024-07-18",
+              "moderation": null,
+              "output": [
+                {
+                  "id": "msg_07e58bfcc5dcc6a9006aa9773f55f487d281a4c34b66b7a203",
+                  "type": "message",
+                  "status": "completed",
+                  "content": [
+                    {
+                      "type": "output_text",
+                      "annotations": [],
+                      "logprobs": [
+                        {
+                          "bytes": [
+                            89,
+                            111,
+                            117,
+                            114
+                          ],
+                          "logprob": -0.000011,
+                          "token": "Your",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            110,
+                            97,
+                            109,
+                            101
+                          ],
+                          "logprob": 0.0,
+                          "token": " name",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            105,
+                            115
+                          ],
+                          "logprob": 0.0,
+                          "token": " is",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            65,
+                            100,
+                            97
+                          ],
+                          "logprob": 0.0,
+                          "token": " Ada",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            46
+                          ],
+                          "logprob": -0.474077,
+                          "token": ".",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            72,
+                            111,
+                            119
+                          ],
+                          "logprob": -0.712443,
+                          "token": " How",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            99,
+                            97,
+                            110
+                          ],
+                          "logprob": -0.001135,
+                          "token": " can",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            73
+                          ],
+                          "logprob": 0.0,
+                          "token": " I",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            104,
+                            101,
+                            108,
+                            112
+                          ],
+                          "logprob": -0.003178,
+                          "token": " help",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            121,
+                            111,
+                            117
+                          ],
+                          "logprob": 0.0,
+                          "token": " you",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            32,
+                            116,
+                            111,
+                            100,
+                            97,
+                            121
+                          ],
+                          "logprob": -0.071357,
+                          "token": " today",
+                          "top_logprobs": []
+                        },
+                        {
+                          "bytes": [
+                            63
+                          ],
+                          "logprob": -0.160225,
+                          "token": "?",
+                          "top_logprobs": []
+                        }
+                      ],
+                      "text": "Your name is Ada. How can I help you today?"
+                    }
+                  ],
+                  "role": "assistant"
+                }
+              ],
+              "parallel_tool_calls": true,
+              "presence_penalty": 0.0,
+              "previous_response_id": "resp_07e58bfcc5dcc6a9006aa9773a57bc87d29cfba77e80f1e146",
+              "prompt_cache_key": null,
+              "prompt_cache_retention": "in_memory",
+              "reasoning": {
+                "context": null,
+                "effort": null,
+                "summary": null
+              },
+              "safety_identifier": null,
+              "service_tier": "default",
+              "store": true,
+              "temperature": 1.0,
+              "text": {
+                "format": {
+                  "type": "text"
+                },
+                "verbosity": "medium"
+              },
+              "tool_choice": "auto",
+              "tool_usage": {
+                "image_gen": {
+                  "input_tokens": 0,
+                  "input_tokens_details": {
+                    "image_tokens": 0,
+                    "text_tokens": 0
+                  },
+                  "output_tokens": 0,
+                  "output_tokens_details": {
+                    "image_tokens": 0,
+                    "text_tokens": 0
+                  },
+                  "total_tokens": 0
+                },
+                "web_search": {
+                  "num_requests": 0
+                }
+              },
+              "tools": [],
+              "top_logprobs": 0,
+              "top_p": 1.0,
+              "truncation": "disabled",
+              "usage": {
+                "input_tokens": 39,
+                "input_tokens_details": {
+                  "cache_write_tokens": 0,
+                  "cached_tokens": 0
+                },
+                "output_tokens": 13,
+                "output_tokens_details": {
+                  "reasoning_tokens": 0
+                },
+                "total_tokens": 52
+              },
+              "user": null,
+              "metadata": {}
+            }
+        headers:
+            Access-Control-Expose-Headers:
+                - X-Request-ID
+                - CF-Ray
+                - CF-Ray
+            Alt-Svc:
+                - h3=":443"; ma=86400
+            Cf-Cache-Status:
+                - DYNAMIC
+            Cf-Ray:
+                - a3b920e0bbb22738-BOM
+            Content-Type:
+                - application/json
+            Date:
+                - Tue, 15 Sep 2026 16:50:07 GMT
+            Openai-Organization:
+                - fluxai-ql6txb
+            Openai-Processing-Ms:
+                - "1851"
+            Openai-Project:
+                - proj_TyVyJP3AZBjMBnVymwmezBd2
+            Openai-Version:
+                - "2020-10-01"
+            Server:
+                - cloudflare
+            Set-Cookie:
+                - __cf_bm=7srJ4nZcqkNpHuYjlgCTkkdPyWCTGDTH0DUwi0vNzF8-1789491005.5515282-1.0.1.1-S_8A9z.0Ts5ZOaiXIVSC42ErhI_g9hXkdD1U.8KbW.TyQAASN7KYfTueT7wgjtogyG5ZQHD2IS5N4qJI6bCZWsly08c2jZ6TjFrVzWsHlE.GQ8x1Km6iqXh4NHWHINpu; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Tue, 15 Sep 2026 17:20:07 GMT
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains; preload
+            X-Content-Type-Options:
+                - nosniff
+            X-Ratelimit-Limit-Requests:
+                - "5000"
+            X-Ratelimit-Limit-Tokens:
+                - "2000000"
+            X-Ratelimit-Remaining-Requests:
+                - "4999"
+            X-Ratelimit-Remaining-Tokens:
+                - "1999942"
+            X-Ratelimit-Reset-Requests:
+                - 12ms
+            X-Ratelimit-Reset-Tokens:
+                - 1ms
+            X-Request-Id:
+                - req_3a5e097f6ac9457388c337237fcc98c5
+        status: 200 OK
+        code: 200
+        duration: 2.3421225s
