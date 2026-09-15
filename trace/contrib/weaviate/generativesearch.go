@@ -12,9 +12,9 @@ package weaviate
 // "Provider-specific reality checks" guidance).
 //
 // Plain vector search and CRUD (WithNearVector/WithNearText without
-// WithGenerativeSearch, Data().Creator(), etc.) are out of scope: they don't
+// WithGenerativeSearch, Data().Creator(), etc.) are out of scope. They don't
 // execute a generative-AI call, so no span is created for them. The router
-// only knows a request is POST /v1/graphql; StartSpan is what actually
+// only knows a request is POST /v1/graphql. StartSpan is what actually
 // decides whether this particular query is a generative search, by checking
 // for the literal "generate(" field name GenerativeSearchBuilder always
 // emits.
@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func (gt *generativeSearchTracer) StartSpan(ctx context.Context, t time.Time, re
 	}
 
 	// Not a generative search (plain vector search, schema query, CRUD via
-	// GraphQL, etc.) - don't create a span for it. The shared middleware
+	// GraphQL, etc.). Don't create a span for it. The shared middleware
 	// unconditionally calls span.End() and friends on whatever StartSpan
 	// returns, so this has to be a real no-op span, not nil: SpanFromContext
 	// on a context with no span in it returns exactly that.
@@ -106,30 +107,46 @@ func (gt *generativeSearchTracer) TagSpan(span trace.Span, body io.Reader) error
 		}
 	}
 
-	var output any
+	// MultiClassGet bundles several Get queries, each with its own
+	// WithGenerativeSearch, into one request. data.Get can then have more
+	// than one class key in the response. Collect every class rather than
+	// assuming there is exactly one, or a multi-class query would silently
+	// lose every class but the first (and which one, since Go map iteration
+	// order isn't stable).
+	classNames := make([]string, 0, len(getResult))
+	byClass := make(map[string]any, len(getResult))
 	for className, objectsRaw := range getResult {
-		gt.metadata["class_name"] = className
 		var objects []map[string]any
 		if err := json.Unmarshal(objectsRaw, &objects); err != nil {
 			return err
 		}
-		output = objects
+		classNames = append(classNames, className)
+		byClass[className] = objects
 		if generateErr := firstGenerateError(objects); generateErr != "" {
 			span.SetStatus(codes.Error, generateErr)
 		}
-		break // Get queries target exactly one class per request.
 	}
+	sort.Strings(classNames)
+	gt.metadata["class_names"] = classNames
 
 	if err := internal.SetJSONAttr(span, "braintrust.metadata", gt.metadata); err != nil {
 		return err
+	}
+
+	// The common case is one class; keep its output as a plain array
+	// instead of a single-key map, matching what a Get query with one
+	// class name actually returns.
+	var output any = byClass
+	if len(classNames) == 1 {
+		output = byClass[classNames[0]]
 	}
 	return internal.SetJSONAttr(span, "braintrust.output_json", output)
 }
 
 // firstGenerateError returns the first non-empty _additional.generate.error
 // across the retrieved objects, if any. A GraphQL-level error (raw.Errors)
-// means the query itself was malformed; this is different - the query
-// succeeded but the generative provider call for one or more objects failed.
+// means the query itself was malformed. Here, the query succeeded, but the
+// generative provider call for one or more objects failed.
 func firstGenerateError(objects []map[string]any) string {
 	for _, obj := range objects {
 		additional, ok := obj["_additional"].(map[string]any)

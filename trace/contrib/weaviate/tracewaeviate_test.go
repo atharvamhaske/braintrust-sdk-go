@@ -16,6 +16,7 @@ import (
 )
 
 const testClassName = "Article"
+const testNoteClassName = "Note"
 
 var testVector = []float32{0.1, 0.2, 0.3, 0.4, 0.5}
 
@@ -83,7 +84,7 @@ func TestGenerativeSearchSingleResult(t *testing.T) {
 
 	metadata := ts.Metadata()
 	assert.Equal("weaviate", metadata["provider"])
-	assert.Equal(testClassName, metadata["class_name"])
+	assert.Equal([]any{testClassName}, metadata["class_names"])
 
 	inputRaw, ok := ts.Input().(map[string]any)
 	require.True(ok)
@@ -136,9 +137,63 @@ func TestGenerativeSearchGroupedResult(t *testing.T) {
 	assert.NotEmpty(generate["groupedResult"])
 }
 
+// TestMultiClassGenerativeSearch exercises MultiClassGet, which bundles
+// several Get queries into one GraphQL request. data.Get can then have more
+// than one class key in a single response. The tracer must capture every
+// class, not just the first one it sees in map iteration.
+func TestMultiClassGenerativeSearch(t *testing.T) {
+	client, exporter := setUpTest(t)
+	require := require.New(t)
+	assert := assert.New(t)
+
+	nearVector := client.GraphQL().NearVectorArgBuilder().WithVector(testVector)
+
+	articleQuery := client.GraphQL().Get().
+		WithClassName(testClassName).
+		WithFields(articleFields()...).
+		WithNearVector(nearVector).
+		WithGenerativeSearch(graphql.NewGenerativeSearch().SingleResult("Summarize: {content}"))
+
+	noteQuery := client.GraphQL().Get().
+		WithClassName(testNoteClassName).
+		WithFields(graphql.Field{Name: "body"}).
+		WithNearVector(nearVector).
+		WithGenerativeSearch(graphql.NewGenerativeSearch().SingleResult("Summarize: {body}"))
+
+	resp, err := client.GraphQL().MultiClassGet().
+		AddQueryClass(articleQuery).
+		AddQueryClass(noteQuery).
+		Do(context.Background())
+	require.NoError(err)
+	require.NotNil(resp)
+
+	ts := exporter.FlushOne()
+	ts.AssertNameIs("weaviate.graphql.generate")
+
+	metadata := ts.Metadata()
+	classNames, ok := metadata["class_names"].([]any)
+	require.True(ok)
+	assert.ElementsMatch([]any{testClassName, testNoteClassName}, classNames)
+
+	output, ok := ts.Output().(map[string]any)
+	require.True(ok, "expected a class-name-keyed map for a multi-class response")
+	for _, className := range []string{testClassName, testNoteClassName} {
+		objects, ok := output[className].([]any)
+		require.True(ok, "missing class %q in output", className)
+		require.NotEmpty(objects, "class %q has no retrieved objects", className)
+		obj, ok := objects[0].(map[string]any)
+		require.True(ok)
+		additional, ok := obj["_additional"].(map[string]any)
+		require.True(ok)
+		generate, ok := additional["generate"].(map[string]any)
+		require.True(ok)
+		assert.NotEmpty(generate["singleResult"], "class %q got no generated text", className)
+	}
+}
+
 // TestPlainVectorSearchNotTraced exercises a GraphQL Get query with no
-// WithGenerativeSearch - plain vector search is out of scope (it's not a
-// generative-AI execution surface), so it must produce no span at all.
+// WithGenerativeSearch. Plain vector search is out of scope, since it isn't
+// a generative-AI execution surface, so it must produce no span at all.
 func TestPlainVectorSearchNotTraced(t *testing.T) {
 	client, exporter := setUpTest(t)
 	require := require.New(t)
