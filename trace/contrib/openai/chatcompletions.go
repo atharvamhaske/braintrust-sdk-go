@@ -180,6 +180,7 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 	var content string
 	var toolCalls []interface{}
 	var annotations []interface{}
+	var logprobsContent []interface{}
 	var finishReason interface{}
 
 	for _, result := range allResults {
@@ -216,6 +217,15 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 			// not built up token-by-token like content).
 			if deltaAnnotations, ok := delta["annotations"].([]interface{}); ok {
 				annotations = append(annotations, deltaAnnotations...)
+			}
+
+			// Handle logprobs. Unlike delta, this is a choice-level field
+			// (not nested under delta), and its content array is built up
+			// per token across chunks the same way content is.
+			if logprobs, ok := choiceMap["logprobs"].(map[string]any); ok {
+				if logprobsDelta, ok := logprobs["content"].([]interface{}); ok {
+					logprobsContent = append(logprobsContent, logprobsDelta...)
+				}
 			}
 
 			// Handle tool_calls aggregation (similar to Python SDK logic)
@@ -280,6 +290,11 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 		finalAnnotations = annotations
 	}
 
+	var finalLogprobs interface{}
+	if len(logprobsContent) > 0 {
+		finalLogprobs = map[string]interface{}{"content": logprobsContent}
+	}
+
 	return []map[string]interface{}{
 		{
 			"index": 0,
@@ -289,7 +304,7 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 				"tool_calls":  finalToolCalls,
 				"annotations": finalAnnotations,
 			},
-			"logprobs":      nil,
+			"logprobs":      finalLogprobs,
 			"finish_reason": finishReason,
 		},
 	}
