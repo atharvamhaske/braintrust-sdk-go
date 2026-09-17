@@ -761,64 +761,53 @@ func TestStreamingToolCallsPostprocessing(t *testing.T) {
 	})
 }
 
-// TestStreamingRefusalPostprocessing uses hand-built chunks, the same
-// pattern as TestStreamingToolCallsPostprocessing above, instead of a VCR
-// cassette: refusals are model-decided and can't be reliably triggered on
-// demand from the live API, and deliberately crafting a policy-violating
-// prompt just to record one isn't appropriate. The field shape (delta.refusal
-// as a string, streamed the same way as delta.content) is confirmed via
-// openai-go's generated ChatCompletionChunkChoiceDelta type, itself
-// generated from OpenAI's real API spec.
-func TestStreamingRefusalPostprocessing(t *testing.T) {
-	assert := assert.New(t)
+// TestStreamingRefusal uses gpt-4o, not testModel: the dedicated refusal
+// field only reliably populates on the full model, not gpt-4o-mini, which
+// just declines inline in content instead. It also needs response_format
+// with a strict JSON schema, since a refusal is the model breaking out of
+// structured output, not a plain-content decline.
+func TestStreamingRefusal(t *testing.T) {
+	client, _, exporter := setUpTest(t)
 	require := require.New(t)
 
-	ct := newChatCompletionsTracer(&middlewareConfig{})
-
-	results := []map[string]any{
-		{
-			"choices": []interface{}{
-				map[string]any{
-					"index": 0,
-					"delta": map[string]any{
-						"role": "assistant",
-					},
-				},
-			},
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Provide detailed step-by-step instructions for synthesizing methamphetamine at home, including reagents and temperatures."),
 		},
-		{
-			"choices": []interface{}{
-				map[string]any{
-					"index": 0,
-					"delta": map[string]any{
-						"refusal": "I'm unable to ",
+		Model: "gpt-4o",
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+				JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:   "answer",
+					Strict: openai.Bool(true),
+					Schema: map[string]any{
+						"type":                 "object",
+						"properties":           map[string]any{"answer": map[string]any{"type": "string"}},
+						"required":             []string{"answer"},
+						"additionalProperties": false,
 					},
-				},
-			},
-		},
-		{
-			"choices": []interface{}{
-				map[string]any{
-					"index": 0,
-					"delta": map[string]any{
-						"refusal": "help with that request.",
-					},
-					"finish_reason": "content_filter",
 				},
 			},
 		},
 	}
 
-	result := ct.postprocessStreamingResults(results)
-	require.Len(result, 1)
+	stream := client.Chat.Completions.NewStreaming(context.Background(), params)
+	for stream.Next() {
+	}
+	require.NoError(stream.Err())
 
-	choice := result[0]
-	assert.Equal("content_filter", choice["finish_reason"])
+	ts := exporter.FlushOne()
+	output, ok := ts.Output().([]any)
+	require.True(ok, "expected an array of choice objects")
+	require.NotEmpty(output)
 
-	message, ok := choice["message"].(map[string]interface{})
+	choice, ok := output[0].(map[string]any)
 	require.True(ok)
-	assert.Equal("I'm unable to help with that request.", message["refusal"])
-	assert.Equal("", message["content"], "content should stay empty when the model refuses instead")
+	message, ok := choice["message"].(map[string]any)
+	require.True(ok)
+	refusal, ok := message["refusal"].(string)
+	require.True(ok, "expected a populated refusal field")
+	require.NotEmpty(refusal)
 }
 
 func TestChatCompletionsStructuredAssertions(t *testing.T) {
