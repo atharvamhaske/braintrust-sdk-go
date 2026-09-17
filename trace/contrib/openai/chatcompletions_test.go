@@ -761,6 +761,66 @@ func TestStreamingToolCallsPostprocessing(t *testing.T) {
 	})
 }
 
+// TestStreamingRefusalPostprocessing uses hand-built chunks, the same
+// pattern as TestStreamingToolCallsPostprocessing above, instead of a VCR
+// cassette: refusals are model-decided and can't be reliably triggered on
+// demand from the live API, and deliberately crafting a policy-violating
+// prompt just to record one isn't appropriate. The field shape (delta.refusal
+// as a string, streamed the same way as delta.content) is confirmed via
+// openai-go's generated ChatCompletionChunkChoiceDelta type, itself
+// generated from OpenAI's real API spec.
+func TestStreamingRefusalPostprocessing(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	ct := newChatCompletionsTracer(&middlewareConfig{})
+
+	results := []map[string]any{
+		{
+			"choices": []interface{}{
+				map[string]any{
+					"index": 0,
+					"delta": map[string]any{
+						"role": "assistant",
+					},
+				},
+			},
+		},
+		{
+			"choices": []interface{}{
+				map[string]any{
+					"index": 0,
+					"delta": map[string]any{
+						"refusal": "I'm unable to ",
+					},
+				},
+			},
+		},
+		{
+			"choices": []interface{}{
+				map[string]any{
+					"index": 0,
+					"delta": map[string]any{
+						"refusal": "help with that request.",
+					},
+					"finish_reason": "content_filter",
+				},
+			},
+		},
+	}
+
+	result := ct.postprocessStreamingResults(results)
+	require.Len(result, 1)
+
+	choice := result[0]
+	assert.Equal("content_filter", choice["finish_reason"])
+
+	message, ok := choice["message"].(map[string]interface{})
+	require.True(ok)
+	assert.Equal("I'm unable to help with that request.", message["refusal"])
+	assert.Equal("", message["content"], "content should stay empty when the model refuses instead")
+}
+
 func TestChatCompletionsStructuredAssertions(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	require := require.New(t)

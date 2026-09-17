@@ -178,6 +178,7 @@ func (ct *chatCompletionsTracer) parseStreamingResponse(span trace.Span, body io
 func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[string]any) []map[string]interface{} {
 	var role *string
 	var content string
+	var refusal string
 	var toolCalls []interface{}
 	var annotations []interface{}
 	var logprobsContent []interface{}
@@ -211,6 +212,13 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 			// Handle content aggregation
 			if deltaContent, ok := delta["content"].(string); ok {
 				content += deltaContent
+			}
+
+			// Handle refusal aggregation. Streamed the same way as content,
+			// but on a separate field: the model uses one or the other, not
+			// both, per chunk.
+			if deltaRefusal, ok := delta["refusal"].(string); ok {
+				refusal += deltaRefusal
 			}
 
 			// Handle URL citation annotations (arrives whole in one chunk,
@@ -295,12 +303,18 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 		finalLogprobs = map[string]interface{}{"content": logprobsContent}
 	}
 
+	var finalRefusal interface{}
+	if refusal != "" {
+		finalRefusal = refusal
+	}
+
 	return []map[string]interface{}{
 		{
 			"index": 0,
 			"message": map[string]interface{}{
 				"role":        finalRole,
 				"content":     content,
+				"refusal":     finalRefusal,
 				"tool_calls":  finalToolCalls,
 				"annotations": finalAnnotations,
 			},
