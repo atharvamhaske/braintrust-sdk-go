@@ -187,6 +187,49 @@ func TestOpenAIChatCompletionsStreaming(t *testing.T) {
 	assert.Equal(true, metadata["stream"])
 }
 
+func TestOpenAIChatCompletionsStreamingLogprobs(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Say hi"),
+		},
+		Model:       testModel,
+		Logprobs:    openai.Bool(true),
+		TopLogprobs: openai.Int(2),
+		MaxTokens:   openai.Int(10),
+	}
+
+	stream := client.Chat.Completions.NewStreaming(context.Background(), params)
+	for stream.Next() {
+	}
+	require.NoError(stream.Err())
+
+	ts := exporter.FlushOne()
+	output, ok := ts.Output().([]any)
+	require.True(ok, "expected an array of choice objects")
+	require.NotEmpty(output)
+
+	choice, ok := output[0].(map[string]any)
+	require.True(ok)
+	logprobs, ok := choice["logprobs"].(map[string]any)
+	require.True(ok, "expected streamed logprobs to be preserved, not dropped as nil")
+
+	content, ok := logprobs["content"].([]any)
+	require.True(ok)
+	require.NotEmpty(content, "expected per-token logprobs entries")
+
+	token, ok := content[0].(map[string]any)
+	require.True(ok)
+	assert.NotEmpty(token["token"])
+	assert.Contains(token, "logprob")
+	topLogprobs, ok := token["top_logprobs"].([]any)
+	require.True(ok)
+	assert.NotEmpty(topLogprobs)
+}
+
 func TestOpenAIChatCompletionsWithTools(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	assert := assert.New(t)
