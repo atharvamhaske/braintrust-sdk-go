@@ -805,6 +805,13 @@ func TestStreamingWithThinking(t *testing.T) {
 	// Verify the streamed text matches what's in the span
 	assert.Contains(t, outputStr, responseText[:10])
 
+	// Thinking tokens are a breakdown of completion_tokens, so they must be
+	// reported separately without being added into the totals.
+	metrics := span.Metrics()
+	assert.Greater(t, metrics["completion_reasoning_tokens"], float64(0))
+	assert.Less(t, metrics["completion_reasoning_tokens"], metrics["completion_tokens"])
+	assert.Equal(t, metrics["prompt_tokens"]+metrics["completion_tokens"], metrics["tokens"])
+
 	metadata := span.Metadata()
 	assert.Equal(t, true, metadata["stream"])
 	assert.NotNil(t, metadata["thinking"])
