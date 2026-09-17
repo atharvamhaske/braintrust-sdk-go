@@ -34,6 +34,8 @@ go get github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk           #
 go get github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino # CloudWeGo Eino
 go get github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo   # LangChainGo
 go get github.com/braintrustdata/braintrust-sdk-go/trace/contrib/github.com/sashabaranov/go-openai # sashabaranov/go-openai
+go get github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime # AWS Bedrock Runtime
+go get github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a          # A2A protocol
 ```
 
 Or install all integrations at once with the meta-module:
@@ -79,6 +81,8 @@ import (
     _ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudwego/eino" // CloudWeGo Eino
     _ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo" // LangChainGo
     _ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/github.com/sashabaranov/go-openai" // sashabaranov/go-openai
+    _ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/bedrockruntime" // AWS Bedrock Runtime
+    _ "github.com/braintrustdata/braintrust-sdk-go/trace/contrib/a2a" // A2A protocol
 )
 ```
 
