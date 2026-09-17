@@ -187,6 +187,47 @@ func TestOpenAIChatCompletionsStreaming(t *testing.T) {
 	assert.Equal(true, metadata["stream"])
 }
 
+func TestOpenAIChatCompletionsStreamingMultipleChoices(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Say hi"),
+		},
+		Model:     testModel,
+		N:         openai.Int(2),
+		MaxTokens: openai.Int(15),
+	}
+
+	stream := client.Chat.Completions.NewStreaming(context.Background(), params)
+	for stream.Next() {
+	}
+	require.NoError(stream.Err())
+
+	ts := exporter.FlushOne()
+	output, ok := ts.Output().([]any)
+	require.True(ok, "expected an array of choice objects")
+	require.Len(output, 2, "expected one entry per requested choice")
+
+	seenIndexes := map[float64]bool{}
+	for _, raw := range output {
+		choice, ok := raw.(map[string]any)
+		require.True(ok)
+		index, ok := choice["index"].(float64)
+		require.True(ok)
+		seenIndexes[index] = true
+
+		message, ok := choice["message"].(map[string]any)
+		require.True(ok)
+		content, ok := message["content"].(string)
+		require.True(ok)
+		assert.NotEmpty(content)
+	}
+	assert.Equal(map[float64]bool{0: true, 1: true}, seenIndexes, "content from each choice must stay separate, not merged")
+}
+
 func TestOpenAIChatCompletionsStreamingLogprobs(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	assert := assert.New(t)
@@ -496,14 +537,7 @@ func TestStreamingToolCallsPostprocessing(t *testing.T) {
 
 	t.Run("EmptyResults", func(t *testing.T) {
 		result := ct.postprocessStreamingResults([]map[string]any{})
-		require.Len(result, 1)
-		choice := result[0]
-
-		message, ok := choice["message"].(map[string]interface{})
-		require.True(ok)
-		assert.Nil(message["role"])
-		assert.Equal("", message["content"])
-		assert.Nil(message["tool_calls"])
+		assert.Empty(result)
 	})
 
 	t.Run("SingleToolCall", func(t *testing.T) {
