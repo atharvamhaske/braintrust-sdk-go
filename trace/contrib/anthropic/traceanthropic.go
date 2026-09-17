@@ -131,6 +131,16 @@ func parseUsageTokens(usage map[string]interface{}) map[string]int64 {
 		metrics["prompt_cached_tokens"] = cacheReadTokens
 	}
 
+	// Extended thinking responses break output tokens down further, into a
+	// thinking_tokens count. This is a subset of output_tokens, not an
+	// additional token class, mirroring completion_reasoning_tokens for the
+	// OpenAI and Google GenAI integrations.
+	if outputDetails, ok := usage["output_tokens_details"].(map[string]interface{}); ok {
+		if thinkingTokens, ok := nonNegativeInt64(outputDetails["thinking_tokens"]); ok {
+			metrics["completion_reasoning_tokens"] = thinkingTokens
+		}
+	}
+
 	// Newer Anthropic responses break cache creation down by TTL. Prefer those
 	// explicit buckets over the aggregate metric when they are present.
 	var cacheCreation5m, cacheCreation1h int64

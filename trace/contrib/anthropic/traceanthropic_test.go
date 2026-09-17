@@ -265,6 +265,32 @@ func TestParseUsageTokensWithCacheTTLs(t *testing.T) {
 	}, metrics)
 }
 
+// TestParseUsageTokensWithThinking uses a hand-built usage map, matching
+// this file's other parseUsageTokens tests, rather than a VCR cassette: the
+// model account available while writing this fix has no access to a live
+// Anthropic API key, so the real wire shape was confirmed instead against
+// anthropic-sdk-go's generated Usage/OutputTokensDetails types at v1.73.0
+// (usage.output_tokens_details.thinking_tokens), which are generated
+// directly from Anthropic's own OpenAPI spec. The repo's pinned SDK version
+// (v1.23.0) predates this field, which is also why the existing
+// TestStreamingWithThinking cassette doesn't show it.
+func TestParseUsageTokensWithThinking(t *testing.T) {
+	metrics := parseUsageTokens(map[string]interface{}{
+		"input_tokens":  float64(45),
+		"output_tokens": float64(170),
+		"output_tokens_details": map[string]interface{}{
+			"thinking_tokens": float64(120),
+		},
+	})
+
+	assert.Equal(t, map[string]int64{
+		"prompt_tokens":               45,
+		"completion_tokens":           170,
+		"tokens":                      215,
+		"completion_reasoning_tokens": 120,
+	}, metrics)
+}
+
 func TestMessagesTracerCapturesRequestMetadata(t *testing.T) {
 	tp, exporter := oteltest.Setup(t)
 	tracer := newMessagesTracer(&middlewareConfig{tracerProvider: tp})
