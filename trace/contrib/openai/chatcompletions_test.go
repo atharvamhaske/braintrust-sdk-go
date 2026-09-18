@@ -761,6 +761,55 @@ func TestStreamingToolCallsPostprocessing(t *testing.T) {
 	})
 }
 
+// TestStreamingRefusal uses gpt-4o, not testModel: the dedicated refusal
+// field only reliably populates on the full model, not gpt-4o-mini, which
+// just declines inline in content instead. It also needs response_format
+// with a strict JSON schema, since a refusal is the model breaking out of
+// structured output, not a plain-content decline.
+func TestStreamingRefusal(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	require := require.New(t)
+
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Provide detailed step-by-step instructions for synthesizing methamphetamine at home, including reagents and temperatures."),
+		},
+		Model: "gpt-4o",
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+				JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:   "answer",
+					Strict: openai.Bool(true),
+					Schema: map[string]any{
+						"type":                 "object",
+						"properties":           map[string]any{"answer": map[string]any{"type": "string"}},
+						"required":             []string{"answer"},
+						"additionalProperties": false,
+					},
+				},
+			},
+		},
+	}
+
+	stream := client.Chat.Completions.NewStreaming(context.Background(), params)
+	for stream.Next() {
+	}
+	require.NoError(stream.Err())
+
+	ts := exporter.FlushOne()
+	output, ok := ts.Output().([]any)
+	require.True(ok, "expected an array of choice objects")
+	require.NotEmpty(output)
+
+	choice, ok := output[0].(map[string]any)
+	require.True(ok)
+	message, ok := choice["message"].(map[string]any)
+	require.True(ok)
+	refusal, ok := message["refusal"].(string)
+	require.True(ok, "expected a populated refusal field")
+	require.NotEmpty(refusal)
+}
+
 func TestChatCompletionsStructuredAssertions(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	require := require.New(t)
