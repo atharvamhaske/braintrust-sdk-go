@@ -40,38 +40,36 @@ func setUpTest(t *testing.T) (*http.Client, string, *oteltest.Exporter) {
 	return tracedClient, apiKey, exporter
 }
 
-// TestSystemOne mirrors the "Support ticket triage" example from the
-// official Python SDK's TypeSafe integration (braintrust-sdk-python#777).
+// TestSystemOne mirrors test_setup_typesafe_system_one_async from the
+// official Python SDK's TypeSafe integration (braintrust-sdk-python#777),
+// adapted to Go's typed question wire format.
 func TestSystemOne(t *testing.T) {
 	client, apiKey, exporter := setUpTest(t)
 	assert := assert.New(t)
 	require := require.New(t)
 
 	reqBody := map[string]any{
-		"state": "Customer says they were charged twice for order #4471 and want it fixed today.",
+		"state": "I was charged twice. Please refund the duplicate charge today.",
 		"model": "jev-latest",
 		"questions": map[string]any{
 			"category": map[string]any{
 				"type":         "choice",
-				"instructions": "What is this ticket about?",
+				"instructions": "Which team should handle this?",
 				"criteria": map[string]string{
-					"billing":   "Charges, refunds, or payment issues",
-					"shipping":  "Delivery or tracking issues",
-					"technical": "Product doesn't work as expected",
+					"billing":   "",
+					"technical": "",
+					"other":     "",
 				},
 			},
 			"urgency": map[string]any{
 				"type":         "score",
-				"instructions": "How urgent is this ticket, from 1 (low) to 5 (high)?",
-				"criteria":     []string{"1", "2", "3", "4", "5"},
+				"instructions": "How urgent is this request?",
+				"criteria":     []string{"routine", "soon", "urgent"},
 			},
 			"duplicate_charge": map[string]any{
 				"type":         "noul",
-				"instructions": "Is the customer reporting a duplicate charge?",
-				"criteria": map[string]string{
-					"true":  "Customer was billed more than once for the same order",
-					"false": "No duplicate billing mentioned",
-				},
+				"instructions": "Does the customer report a duplicate charge?",
+				"criteria":     map[string]string{},
 			},
 		},
 	}

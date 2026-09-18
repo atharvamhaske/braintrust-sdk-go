@@ -38,33 +38,31 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// "Support ticket triage" example - mirrors the one used by the official
-	// Python and JS SDKs' TypeSafe integrations.
+	// Same scenario as the official Python SDK's TypeSafe integration test
+	// (test_setup_typesafe_system_one_async in braintrust-sdk-python#777),
+	// adapted to Go's typed Question fields.
 	tracer := otel.Tracer("typesafe-example")
 	ctx, span := tracer.Start(ctx, "Support ticket triage")
 	defer span.End()
 
 	resp, err := client.SystemOne(ctx,
-		"Customer says they were charged twice for order #4471 and want it fixed today.",
+		"I was charged twice. Please refund the duplicate charge today.",
 		map[string]ts.Question{
 			"category": ts.Choice{
-				Instructions: "What is this ticket about?",
+				Instructions: "Which team should handle this?",
 				Criteria: map[string]string{
-					"billing":   "Charges, refunds, or payment issues",
-					"shipping":  "Delivery or tracking issues",
-					"technical": "Product doesn't work as expected",
+					"billing":   "",
+					"technical": "",
+					"other":     "",
 				},
 			},
 			"urgency": ts.Score{
-				Instructions: "How urgent is this ticket, from 1 (low) to 5 (high)?",
-				Criteria:     []string{"1", "2", "3", "4", "5"},
+				Instructions: "How urgent is this request?",
+				Criteria:     []string{"routine", "soon", "urgent"},
 			},
 			"duplicate_charge": ts.Noul{
-				Instructions: "Is the customer reporting a duplicate charge?",
-				Criteria: map[string]string{
-					"true":  "Customer was billed more than once for the same order",
-					"false": "No duplicate billing mentioned",
-				},
+				Instructions: "Does the customer report a duplicate charge?",
+				Criteria:     map[string]string{},
 			},
 		},
 	)
