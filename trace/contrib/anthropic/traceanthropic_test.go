@@ -751,6 +751,35 @@ func assertSpanValidWithName(t *testing.T, span oteltest.Span, timeRange oteltes
 }
 
 // TestStreamingWithThinking tests tracing with streaming and extended thinking enabled
+func TestStreamingWithServerToolUse(t *testing.T) {
+	client, exporter := setUpTest(t)
+
+	timer := oteltest.NewTimer()
+	ctx := context.Background()
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Search the web for the current Braintrust AI homepage title.")),
+		},
+		Tools: []anthropic.ToolUnionParam{
+			{OfWebSearchTool20250305: &anthropic.WebSearchTool20250305Param{MaxUses: anthropic.Int(1)}},
+		},
+	})
+
+	for stream.Next() {
+	}
+	require.NoError(t, stream.Err())
+	timeRange := timer.Tick()
+
+	span := exporter.FlushOne()
+	assertStreamingSpanValid(t, span, timeRange)
+
+	outputStr := span.Attr("braintrust.output_json").String()
+	assert.Contains(t, outputStr, `"type":"server_tool_use"`)
+	assert.NotContains(t, outputStr, `"server_tool_use","input":""`)
+}
+
 func TestStreamingWithThinking(t *testing.T) {
 	client, exporter := setUpTest(t)
 
