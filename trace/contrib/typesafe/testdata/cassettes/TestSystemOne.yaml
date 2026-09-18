@@ -1,0 +1,46 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 692
+        transfer_encoding: []
+        trailer: {}
+        host: api.typesafe.ai
+        remote_addr: ""
+        request_uri: ""
+        body: '{"model":"jev-latest","questions":{"category":{"criteria":{"billing":"Charges, refunds, or payment issues","shipping":"Delivery or tracking issues","technical":"Product doesn''t work as expected"},"instructions":"What is this ticket about?","type":"choice"},"duplicate_charge":{"criteria":{"false":"No duplicate billing mentioned","true":"Customer was billed more than once for the same order"},"instructions":"Is the customer reporting a duplicate charge?","type":"noul"},"urgency":{"criteria":["1","2","3","4","5"],"instructions":"How urgent is this ticket, from 1 (low) to 5 (high)?","type":"score"}},"state":"Customer says they were charged twice for order #4471 and want it fixed today."}'
+        form: {}
+        headers:
+            Content-Type:
+                - application/json
+        url: https://api.typesafe.ai/v1/systemone
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 427
+        uncompressed: false
+        body: '{"model":"jev-1.13.0","answers":{"category":{"type":"choice","choice":"billing","confidence":1.0,"probabilities":{"billing":1.0,"technical":0.0,"shipping":0.0}},"duplicate_charge":{"type":"noul","noul":0.98},"urgency":{"type":"score","score":3.44,"confidence":0.61,"legend":{"0":"1","1":"2","2":"3","3":"4","4":"5"},"probabilities":{"0":0.0,"1":0.0,"2":0.01,"3":0.53,"4":0.46}}},"usage":{"input_tokens":458,"output_tokens":70}}'
+        headers:
+            Content-Length:
+                - "427"
+            Content-Type:
+                - application/json
+            Date:
+                - Fri, 18 Sep 2026 19:51:33 GMT
+            Server:
+                - istio-envoy
+            X-Envoy-Upstream-Service-Time:
+                - "122"
+            X-Typesafe-Request-Id:
+                - req_01a0b613044978a494abbec2e8b0eb2d
+        status: 200 OK
+        code: 200
+        duration: 992.133875ms
