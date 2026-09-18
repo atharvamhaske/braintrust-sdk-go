@@ -1,17 +1,12 @@
 package internal
 
-// Shared normalization for the Claude Messages API request format, used by both
-// the native Anthropic integration and the Bedrock InvokeModel integration,
-// which send the same payload shape.
+// Shared normalization for the Claude Messages API request format, which both
+// the Anthropic and Bedrock InvokeModel integrations receive.
 
-// NormalizeClaudeTools converts a Claude request's tool definitions into the
-// shape the Braintrust instrumentation spec requires for metadata.tools.
-//
-// User-defined function tools become OpenAI Chat Completions tool objects.
-// Claude's built-in server-side tools (web_search, computer, bash, text_editor,
-// code_execution, ...) are passed through with their provider-native type and
-// configuration intact, because they are not function-like and must not be
-// given a fabricated function name or input schema.
+// NormalizeClaudeTools converts user-defined tools into the OpenAI Chat
+// Completions shape for metadata.tools. Built-in server-side tools (web_search,
+// computer, bash, ...) pass through untouched: they aren't function-like, so a
+// fabricated function name or schema would misrepresent them.
 func NormalizeClaudeTools(value any) []any {
 	tools, ok := value.([]any)
 	if !ok {
@@ -44,10 +39,9 @@ func NormalizeClaudeTools(value any) []any {
 	return result
 }
 
-// isClaudeFunctionTool reports whether a tool definition is a user-defined
-// function tool. Claude identifies built-in server-side tools by a versioned
-// type (e.g. "web_search_20250305"); user-defined tools carry an input_schema
-// and either no type or the explicit "custom" type.
+// isClaudeFunctionTool reports whether a tool is user-defined. Built-ins carry a
+// versioned type (e.g. "web_search_20250305"); user tools carry an input_schema
+// with either no type or type "custom".
 func isClaudeFunctionTool(tool map[string]any) bool {
 	if _, hasSchema := tool["input_schema"]; !hasSchema {
 		return false
@@ -60,8 +54,7 @@ func isClaudeFunctionTool(tool map[string]any) bool {
 }
 
 // NormalizeClaudeToolChoice maps Claude's tool_choice onto the OpenAI
-// vocabulary the spec mandates. It returns nil for unrecognized values so that
-// no unspecified data is emitted.
+// vocabulary, returning nil for unrecognized values.
 func NormalizeClaudeToolChoice(value any) any {
 	choice, ok := value.(map[string]any)
 	if !ok {

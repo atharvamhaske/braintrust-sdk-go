@@ -27,8 +27,7 @@ func TestNormalizeClaudeTools(t *testing.T) {
 			}},
 		},
 		{
-			// Anthropic tags user-defined tools with an explicit "custom" type;
-			// they are still function-like.
+			// An explicit "custom" type is still user-defined.
 			name:  "explicit custom type converts and keeps strict",
 			tools: []any{map[string]any{"type": "custom", "name": "get_weather", "input_schema": schema, "strict": true}},
 			want: []any{map[string]any{
@@ -37,8 +36,7 @@ func TestNormalizeClaudeTools(t *testing.T) {
 			}},
 		},
 		{
-			// Built-in server-side tools are not function-like, so their native
-			// type and config must survive rather than becoming a fake function.
+			// Built-ins aren't function-like: native type and config must survive.
 			name:  "built-in tool keeps its native type and config",
 			tools: []any{map[string]any{"type": "web_search_20250305", "name": "web_search", "max_uses": float64(1)}},
 			want:  []any{map[string]any{"type": "web_search_20250305", "name": "web_search", "max_uses": float64(1)}},

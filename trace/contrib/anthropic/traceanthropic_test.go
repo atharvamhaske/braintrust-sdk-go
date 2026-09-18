@@ -308,8 +308,7 @@ func TestMessagesTracerCapturesRequestMetadata(t *testing.T) {
 			"type":          "enabled",
 			"budget_tokens": float64(1024),
 		},
-		// Tools and tool_choice keep Anthropic's native shape so the UI's
-		// Anthropic normalizer detects and converts them for display.
+		// Native shape: the UI's Anthropic normalizer converts it for display.
 		"tools": []any{map[string]any{
 			"name":        "get_weather",
 			"description": "Get the weather",
@@ -777,17 +776,14 @@ func TestStreamingWithServerToolUse(t *testing.T) {
 	span := exporter.FlushOne()
 	assertStreamingSpanValid(t, span, timeRange)
 
-	// The server_tool_use block must keep its provider-native type and expose
-	// its accumulated input as a JSON object, not the raw partial_json string.
+	// The block keeps its native type, with input decoded from partial_json.
 	block := findAnthropicContentBlock(t, span.Output(), "server_tool_use")
 	assert.Equal(t, "web_search", block["name"])
 	input, ok := block["input"].(map[string]any)
 	require.True(t, ok, "server_tool_use input must be a JSON object, got %T", block["input"])
 	assert.NotEmpty(t, input["query"])
 
-	// Built-in server-side tools are not function-like, so metadata.tools must
-	// preserve the provider-native type and config instead of inventing a
-	// function schema for them.
+	// Built-in tools aren't function-like, so they keep their native type.
 	tools, ok := span.Metadata()["tools"].([]any)
 	require.True(t, ok)
 	require.Len(t, tools, 1)
@@ -798,8 +794,7 @@ func TestStreamingWithServerToolUse(t *testing.T) {
 	assert.NotContains(t, tool, "function")
 }
 
-// findAnthropicContentBlock returns the first content block of the given type
-// from a span output captured in Anthropic's native message format.
+// findAnthropicContentBlock returns the first content block of the given type.
 func findAnthropicContentBlock(t *testing.T, output any, blockType string) map[string]any {
 	t.Helper()
 	message, ok := output.(map[string]any)
@@ -1118,12 +1113,10 @@ func TestStreamingWithTools(t *testing.T) {
 	assert.Equal(t, map[string]any{"location": "Tokyo"}, toolUse["input"])
 }
 
-// assertAnthropicFunctionTool asserts that metadata.tools keeps Anthropic's
-// native tool shape. The Braintrust UI ships a dedicated Anthropic normalizer
-// that detects provider == "anthropic" plus native {name, input_schema} tool
-// definitions and converts them for display. Emitting the OpenAI tool shape
-// here would fail that detection and silently disable the normalizer, which
-// also rewrites tool_use/tool_result content blocks in the span input/output.
+// assertAnthropicFunctionTool asserts metadata.tools keeps Anthropic's native
+// shape. The UI's Anthropic normalizer converts it for display, but only detects
+// tools with a top-level name, so emitting the OpenAI shape would silently
+// disable it, along with its tool_use/tool_result rewriting.
 func assertAnthropicFunctionTool(t *testing.T, metadata map[string]any, expectedName string) {
 	t.Helper()
 	tools, ok := metadata["tools"].([]any)

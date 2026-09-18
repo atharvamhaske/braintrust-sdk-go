@@ -142,9 +142,8 @@ func (a *ClaudeStreamAccumulator) Output() []map[string]any {
 		case "text":
 			block["text"] = text
 		case "tool_use", "server_tool_use", "mcp_tool_use":
-			// Tools taking no arguments stream no input_json_delta events, so
-			// keep the object input from content_block_start rather than
-			// replacing it with the empty accumulated string.
+			// Tools with no arguments stream no deltas: keep the input from
+			// content_block_start instead of overwriting it with the empty string.
 			if text == "" {
 				if _, hasInput := block["input"]; !hasInput {
 					block["input"] = map[string]any{}

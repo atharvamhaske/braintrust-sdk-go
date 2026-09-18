@@ -164,10 +164,8 @@ func (a *AnthropicBot) streaming(ctx context.Context) error {
 	return nil
 }
 
-// streamingServerToolUse demonstrates streaming with an Anthropic server-side
-// tool (web search). Anthropic runs these tools itself and streams back
-// server_tool_use blocks, whose block type and accumulated JSON input the
-// tracing middleware preserves in the span output.
+// streamingServerToolUse demonstrates streaming with a server-side tool, which
+// Anthropic runs itself, streaming back server_tool_use blocks.
 func (a *AnthropicBot) streamingServerToolUse(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "streaming-server-tool-use")
 	defer span.End()
