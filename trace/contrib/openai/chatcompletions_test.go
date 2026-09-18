@@ -187,6 +187,32 @@ func TestOpenAIChatCompletionsStreaming(t *testing.T) {
 	assert.Equal(true, metadata["stream"])
 }
 
+func TestOpenAIChatCompletionsStreamingResponseMetadata(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	params := openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Say hi"),
+		},
+		Model:     testModel,
+		MaxTokens: openai.Int(10),
+	}
+
+	stream := client.Chat.Completions.NewStreaming(context.Background(), params)
+	for stream.Next() {
+	}
+	require.NoError(stream.Err())
+
+	ts := exporter.FlushOne()
+	metadata := ts.Metadata()
+	assert.NotEmpty(metadata["id"])
+	assert.Equal("chat.completion.chunk", metadata["object"])
+	assert.NotEmpty(metadata["created"])
+	assert.NotEmpty(metadata["system_fingerprint"])
+}
+
 func TestOpenAIChatCompletionsStreamingLogprobs(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	assert := assert.New(t)
