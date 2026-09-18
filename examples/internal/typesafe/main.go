@@ -25,7 +25,11 @@ func main() {
 	}()
 	otel.SetTracerProvider(tp)
 
-	if _, err := braintrust.New(tp, braintrust.WithProject("typesafe-examples")); err != nil {
+	bt, err := braintrust.New(tp,
+		braintrust.WithProject("typesafe-examples"),
+		braintrust.WithBlockingLogin(true),
+	)
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -77,4 +81,6 @@ func main() {
 	for name, answer := range resp.Nouls() {
 		fmt.Printf("%s: %.2f\n", name, answer.Noul)
 	}
+
+	fmt.Printf("View trace: %s\n", bt.Permalink(span))
 }
