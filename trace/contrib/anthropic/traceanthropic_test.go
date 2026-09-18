@@ -308,6 +308,8 @@ func TestMessagesTracerCapturesRequestMetadata(t *testing.T) {
 			"type":          "enabled",
 			"budget_tokens": float64(1024),
 		},
+		// Tools and tool_choice keep Anthropic's native shape so the UI's
+		// Anthropic normalizer detects and converts them for display.
 		"tools": []any{map[string]any{
 			"name":        "get_weather",
 			"description": "Get the weather",
@@ -1116,6 +1118,12 @@ func TestStreamingWithTools(t *testing.T) {
 	assert.Equal(t, map[string]any{"location": "Tokyo"}, toolUse["input"])
 }
 
+// assertAnthropicFunctionTool asserts that metadata.tools keeps Anthropic's
+// native tool shape. The Braintrust UI ships a dedicated Anthropic normalizer
+// that detects provider == "anthropic" plus native {name, input_schema} tool
+// definitions and converts them for display. Emitting the OpenAI tool shape
+// here would fail that detection and silently disable the normalizer, which
+// also rewrites tool_use/tool_result content blocks in the span input/output.
 func assertAnthropicFunctionTool(t *testing.T, metadata map[string]any, expectedName string) {
 	t.Helper()
 	tools, ok := metadata["tools"].([]any)
