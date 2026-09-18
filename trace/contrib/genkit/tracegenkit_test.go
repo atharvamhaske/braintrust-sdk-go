@@ -346,6 +346,18 @@ func TestFinishReason(t *testing.T) {
 	}
 }
 
+func TestMessageContentLabelsReasoningPart(t *testing.T) {
+	msg := &ai.Message{Role: ai.RoleModel, Content: []*ai.Part{
+		ai.NewReasoningPart("thinking it through", []byte("sig-123")),
+		ai.NewTextPart("the answer"),
+	}}
+
+	assert.Equal(t, []map[string]any{
+		{"type": "reasoning", "text": "thinking it through", "signature": []byte("sig-123")},
+		{"type": "text", "text": "the answer"},
+	}, messageContent(msg))
+}
+
 func TestCanonicalMessagePayloads(t *testing.T) {
 	req := &ai.ModelRequest{Messages: []*ai.Message{
 		ai.NewUserTextMessage("weather?"),
