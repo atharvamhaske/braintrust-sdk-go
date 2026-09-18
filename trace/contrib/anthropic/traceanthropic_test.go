@@ -775,9 +775,43 @@ func TestStreamingWithServerToolUse(t *testing.T) {
 	span := exporter.FlushOne()
 	assertStreamingSpanValid(t, span, timeRange)
 
-	outputStr := span.Attr("braintrust.output_json").String()
-	assert.Contains(t, outputStr, `"type":"server_tool_use"`)
-	assert.NotContains(t, outputStr, `"server_tool_use","input":""`)
+	// The server_tool_use block must keep its provider-native type and expose
+	// its accumulated input as a JSON object, not the raw partial_json string.
+	block := findAnthropicContentBlock(t, span.Output(), "server_tool_use")
+	assert.Equal(t, "web_search", block["name"])
+	input, ok := block["input"].(map[string]any)
+	require.True(t, ok, "server_tool_use input must be a JSON object, got %T", block["input"])
+	assert.NotEmpty(t, input["query"])
+
+	// Built-in server-side tools are not function-like, so metadata.tools must
+	// preserve the provider-native type and config instead of inventing a
+	// function schema for them.
+	tools, ok := span.Metadata()["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "web_search_20250305", tool["type"])
+	assert.Equal(t, "web_search", tool["name"])
+	assert.NotContains(t, tool, "function")
+}
+
+// findAnthropicContentBlock returns the first content block of the given type
+// from a span output captured in Anthropic's native message format.
+func findAnthropicContentBlock(t *testing.T, output any, blockType string) map[string]any {
+	t.Helper()
+	message, ok := output.(map[string]any)
+	require.True(t, ok, "output should be an Anthropic message object")
+	content, ok := message["content"].([]any)
+	require.True(t, ok, "message content should be a list of content blocks")
+	for _, raw := range content {
+		block, ok := raw.(map[string]any)
+		if ok && block["type"] == blockType {
+			return block
+		}
+	}
+	t.Fatalf("no %q content block in output", blockType)
+	return nil
 }
 
 func TestStreamingWithThinking(t *testing.T) {
