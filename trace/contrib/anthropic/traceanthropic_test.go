@@ -308,6 +308,7 @@ func TestMessagesTracerCapturesRequestMetadata(t *testing.T) {
 			"type":          "enabled",
 			"budget_tokens": float64(1024),
 		},
+		// Native shape: the UI's Anthropic normalizer converts it for display.
 		"tools": []any{map[string]any{
 			"name":        "get_weather",
 			"description": "Get the weather",
@@ -751,6 +752,65 @@ func assertSpanValidWithName(t *testing.T, span oteltest.Span, timeRange oteltes
 }
 
 // TestStreamingWithThinking tests tracing with streaming and extended thinking enabled
+func TestStreamingWithServerToolUse(t *testing.T) {
+	client, exporter := setUpTest(t)
+
+	timer := oteltest.NewTimer()
+	ctx := context.Background()
+	stream := client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Search the web for the current Braintrust AI homepage title.")),
+		},
+		Tools: []anthropic.ToolUnionParam{
+			{OfWebSearchTool20250305: &anthropic.WebSearchTool20250305Param{MaxUses: anthropic.Int(1)}},
+		},
+	})
+
+	for stream.Next() {
+	}
+	require.NoError(t, stream.Err())
+	timeRange := timer.Tick()
+
+	span := exporter.FlushOne()
+	assertStreamingSpanValid(t, span, timeRange)
+
+	// The block keeps its native type, with input decoded from partial_json.
+	block := findAnthropicContentBlock(t, span.Output(), "server_tool_use")
+	assert.Equal(t, "web_search", block["name"])
+	input, ok := block["input"].(map[string]any)
+	require.True(t, ok, "server_tool_use input must be a JSON object, got %T", block["input"])
+	assert.NotEmpty(t, input["query"])
+
+	// Built-in tools aren't function-like, so they keep their native type.
+	tools, ok := span.Metadata()["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "web_search_20250305", tool["type"])
+	assert.Equal(t, "web_search", tool["name"])
+	assert.NotContains(t, tool, "function")
+}
+
+// findAnthropicContentBlock returns the first content block of the given type.
+func findAnthropicContentBlock(t *testing.T, output any, blockType string) map[string]any {
+	t.Helper()
+	message, ok := output.(map[string]any)
+	require.True(t, ok, "output should be an Anthropic message object")
+	content, ok := message["content"].([]any)
+	require.True(t, ok, "message content should be a list of content blocks")
+	for _, raw := range content {
+		block, ok := raw.(map[string]any)
+		if ok && block["type"] == blockType {
+			return block
+		}
+	}
+	t.Fatalf("no %q content block in output", blockType)
+	return nil
+}
+
 func TestStreamingWithThinking(t *testing.T) {
 	client, exporter := setUpTest(t)
 
@@ -1053,6 +1113,10 @@ func TestStreamingWithTools(t *testing.T) {
 	assert.Equal(t, map[string]any{"location": "Tokyo"}, toolUse["input"])
 }
 
+// assertAnthropicFunctionTool asserts metadata.tools keeps Anthropic's native
+// shape. The UI's Anthropic normalizer converts it for display, but only detects
+// tools with a top-level name, so emitting the OpenAI shape would silently
+// disable it, along with its tool_use/tool_result rewriting.
 func assertAnthropicFunctionTool(t *testing.T, metadata map[string]any, expectedName string) {
 	t.Helper()
 	tools, ok := metadata["tools"].([]any)

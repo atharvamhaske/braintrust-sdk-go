@@ -95,7 +95,9 @@ func (a *ClaudeStreamAccumulator) addDelta(event map[string]any) bool {
 		if !ok {
 			return false
 		}
-		block["type"] = "tool_use"
+		if _, hasType := block["type"]; !hasType {
+			block["type"] = "tool_use"
+		}
 		builder.WriteString(partial)
 		return partial != ""
 	case "thinking_delta":
@@ -139,7 +141,15 @@ func (a *ClaudeStreamAccumulator) Output() []map[string]any {
 		switch block["type"] {
 		case "text":
 			block["text"] = text
-		case "tool_use":
+		case "tool_use", "server_tool_use", "mcp_tool_use":
+			// Tools with no arguments stream no deltas: keep the input from
+			// content_block_start instead of overwriting it with the empty string.
+			if text == "" {
+				if _, hasInput := block["input"]; !hasInput {
+					block["input"] = map[string]any{}
+				}
+				break
+			}
 			var input any
 			if err := json.Unmarshal([]byte(text), &input); err == nil {
 				block["input"] = input
