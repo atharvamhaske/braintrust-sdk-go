@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -185,14 +186,22 @@ func (ct *chatCompletionsTracer) parseStreamingResponse(span trace.Span, body io
 	return scanner.Err()
 }
 
+// choiceAccumulator collects one choice index's worth of streamed deltas.
+// With n > 1, chunks for different choice indices interleave, so each index
+// needs its own accumulator rather than one shared across all of them.
+type choiceAccumulator struct {
+	role            *string
+	content         string
+	refusal         string
+	toolCalls       []interface{}
+	annotations     []interface{}
+	logprobsContent []interface{}
+	finishReason    interface{}
+}
+
 func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[string]any) []map[string]interface{} {
-	var role *string
-	var content string
-	var refusal string
-	var toolCalls []interface{}
-	var annotations []interface{}
-	var logprobsContent []interface{}
-	var finishReason interface{}
+	accumulators := map[int64]*choiceAccumulator{}
+	var order []int64
 
 	for _, result := range allResults {
 		choices, ok := result["choices"].([]interface{})
@@ -200,41 +209,55 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 			continue
 		}
 
-		// Process first choice (index 0) similar to Python SDK
-		if choiceMap, ok := choices[0].(map[string]any); ok {
+		for _, choice := range choices {
+			choiceMap, ok := choice.(map[string]any)
+			if !ok {
+				continue
+			}
 			delta, ok := choiceMap["delta"].(map[string]any)
 			if !ok {
 				continue
 			}
 
+			ok, index := internal.ToInt64(choiceMap["index"])
+			if !ok {
+				index = 0
+			}
+			acc, exists := accumulators[index]
+			if !exists {
+				acc = &choiceAccumulator{}
+				accumulators[index] = acc
+				order = append(order, index)
+			}
+
 			// Handle role (set once from first delta that has it)
-			if role == nil {
+			if acc.role == nil {
 				if deltaRole, ok := delta["role"].(string); ok {
-					role = &deltaRole
+					acc.role = &deltaRole
 				}
 			}
 
 			// Handle finish_reason
 			if fr, ok := choiceMap["finish_reason"]; ok && fr != nil {
-				finishReason = fr
+				acc.finishReason = fr
 			}
 
 			// Handle content aggregation
 			if deltaContent, ok := delta["content"].(string); ok {
-				content += deltaContent
+				acc.content += deltaContent
 			}
 
 			// Handle refusal aggregation. Streamed the same way as content,
 			// but on a separate field: the model uses one or the other, not
 			// both, per chunk.
 			if deltaRefusal, ok := delta["refusal"].(string); ok {
-				refusal += deltaRefusal
+				acc.refusal += deltaRefusal
 			}
 
 			// Handle URL citation annotations (arrives whole in one chunk,
 			// not built up token-by-token like content).
 			if deltaAnnotations, ok := delta["annotations"].([]interface{}); ok {
-				annotations = append(annotations, deltaAnnotations...)
+				acc.annotations = append(acc.annotations, deltaAnnotations...)
 			}
 
 			// Handle logprobs. Unlike delta, this is a choice-level field
@@ -242,7 +265,7 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 			// per token across chunks the same way content is.
 			if logprobs, ok := choiceMap["logprobs"].(map[string]any); ok {
 				if logprobsDelta, ok := logprobs["content"].([]interface{}); ok {
-					logprobsContent = append(logprobsContent, logprobsDelta...)
+					acc.logprobsContent = append(acc.logprobsContent, logprobsDelta...)
 				}
 			}
 
@@ -252,10 +275,10 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 					// Check if this is a new tool call or continuation
 					if toolID, ok := toolDelta["id"].(string); ok && toolID != "" {
 						// New tool call - check if we need to create a new one
-						isNewToolCall := len(toolCalls) == 0
+						isNewToolCall := len(acc.toolCalls) == 0
 						if !isNewToolCall {
 							// Safe to access last tool call since slice is not empty
-							if lastTool, ok := toolCalls[len(toolCalls)-1].(map[string]interface{}); ok {
+							if lastTool, ok := acc.toolCalls[len(acc.toolCalls)-1].(map[string]interface{}); ok {
 								isNewToolCall = lastTool["id"] != toolID
 							} else {
 								isNewToolCall = true // type assertion failed, treat as new
@@ -269,11 +292,11 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 							if function, ok := toolDelta["function"].(map[string]any); ok {
 								newToolCall["function"] = function
 							}
-							toolCalls = append(toolCalls, newToolCall)
+							acc.toolCalls = append(acc.toolCalls, newToolCall)
 						}
-					} else if len(toolCalls) > 0 {
+					} else if len(acc.toolCalls) > 0 {
 						// Continuation of existing tool call - append arguments
-						if lastTool, ok := toolCalls[len(toolCalls)-1].(map[string]interface{}); ok {
+						if lastTool, ok := acc.toolCalls[len(acc.toolCalls)-1].(map[string]interface{}); ok {
 							if function, ok := lastTool["function"].(map[string]interface{}); ok {
 								if deltaFunction, ok := toolDelta["function"].(map[string]any); ok {
 									if args, ok := deltaFunction["arguments"].(string); ok {
@@ -292,46 +315,52 @@ func (ct *chatCompletionsTracer) postprocessStreamingResults(allResults []map[st
 		}
 	}
 
-	// Build the final response similar to Python SDK
-	var finalRole interface{}
-	if role != nil {
-		finalRole = *role
-	}
+	sort.Slice(order, func(i, j int) bool { return order[i] < order[j] })
 
-	var finalToolCalls interface{}
-	if len(toolCalls) > 0 {
-		finalToolCalls = toolCalls
-	}
+	results := make([]map[string]interface{}, 0, len(order))
+	for _, index := range order {
+		acc := accumulators[index]
 
-	var finalAnnotations interface{}
-	if len(annotations) > 0 {
-		finalAnnotations = annotations
-	}
+		var finalRole interface{}
+		if acc.role != nil {
+			finalRole = *acc.role
+		}
 
-	var finalLogprobs interface{}
-	if len(logprobsContent) > 0 {
-		finalLogprobs = map[string]interface{}{"content": logprobsContent}
-	}
+		var finalToolCalls interface{}
+		if len(acc.toolCalls) > 0 {
+			finalToolCalls = acc.toolCalls
+		}
 
-	var finalRefusal interface{}
-	if refusal != "" {
-		finalRefusal = refusal
-	}
+		var finalAnnotations interface{}
+		if len(acc.annotations) > 0 {
+			finalAnnotations = acc.annotations
+		}
 
-	return []map[string]interface{}{
-		{
-			"index": 0,
+		var finalLogprobs interface{}
+		if len(acc.logprobsContent) > 0 {
+			finalLogprobs = map[string]interface{}{"content": acc.logprobsContent}
+		}
+
+		var finalRefusal interface{}
+		if acc.refusal != "" {
+			finalRefusal = acc.refusal
+		}
+
+		results = append(results, map[string]interface{}{
+			"index": index,
 			"message": map[string]interface{}{
 				"role":        finalRole,
-				"content":     content,
+				"content":     acc.content,
 				"refusal":     finalRefusal,
 				"tool_calls":  finalToolCalls,
 				"annotations": finalAnnotations,
 			},
 			"logprobs":      finalLogprobs,
-			"finish_reason": finishReason,
-		},
+			"finish_reason": acc.finishReason,
+		})
 	}
+
+	return results
 }
 
 func (ct *chatCompletionsTracer) parseResponse(span trace.Span, body io.Reader) error {
