@@ -257,10 +257,10 @@ func normalizeInvokeModelInput(modelID string, body []byte, metadata map[string]
 	if stop, exists := request["stop_sequences"]; exists {
 		metadata["stop"] = stop
 	}
-	if tools := normalizeClaudeTools(request["tools"]); len(tools) > 0 {
+	if tools := internal.NormalizeClaudeTools(request["tools"]); len(tools) > 0 {
 		metadata["tools"] = tools
 	}
-	if choice := normalizeClaudeToolChoice(request["tool_choice"]); choice != nil {
+	if choice := internal.NormalizeClaudeToolChoice(request["tool_choice"]); choice != nil {
 		metadata["tool_choice"] = choice
 	}
 
@@ -314,54 +314,6 @@ func normalizeClaudeContent(value any) any {
 		result = append(result, reasoning)
 	}
 	return result
-}
-
-func normalizeClaudeTools(value any) []any {
-	tools, ok := value.([]any)
-	if !ok {
-		return nil
-	}
-	result := make([]any, 0, len(tools))
-	for _, rawTool := range tools {
-		tool, ok := rawTool.(map[string]any)
-		if !ok {
-			continue
-		}
-		function := map[string]any{}
-		for _, key := range []string{"name", "description"} {
-			if value, exists := tool[key]; exists {
-				function[key] = value
-			}
-		}
-		if parameters, exists := tool["input_schema"]; exists {
-			function["parameters"] = parameters
-		}
-		if strict, exists := tool["strict"]; exists {
-			function["strict"] = strict
-		}
-		result = append(result, map[string]any{"type": "function", "function": function})
-	}
-	return result
-}
-
-func normalizeClaudeToolChoice(value any) any {
-	choice, ok := value.(map[string]any)
-	if !ok {
-		return nil
-	}
-	switch choice["type"] {
-	case "auto":
-		return "auto"
-	case "any":
-		return "required"
-	case "none":
-		return "none"
-	case "tool":
-		name, _ := choice["name"].(string)
-		return map[string]any{"type": "function", "function": map[string]any{"name": name}}
-	default:
-		return nil
-	}
 }
 
 func isClaudeModel(modelID string) bool {

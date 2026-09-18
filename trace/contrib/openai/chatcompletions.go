@@ -150,6 +150,16 @@ func (ct *chatCompletionsTracer) parseStreamingResponse(span trace.Span, body io
 		if usage, ok := chunk["usage"]; ok {
 			ct.metadata["usage"] = usage
 		}
+
+		for _, field := range []string{"id", "object", "created", "system_fingerprint", "service_tier"} {
+			if v, ok := chunk[field]; ok {
+				ct.metadata[field] = v
+			}
+		}
+	}
+
+	if err := internal.SetJSONAttr(span, "braintrust.metadata", ct.metadata); err != nil {
+		return err
 	}
 
 	// Post-process streaming results to match Python SDK behavior

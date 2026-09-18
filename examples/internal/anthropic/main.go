@@ -164,6 +164,51 @@ func (a *AnthropicBot) streaming(ctx context.Context) error {
 	return nil
 }
 
+// streamingServerToolUse demonstrates streaming with a server-side tool, which
+// Anthropic runs itself, streaming back server_tool_use blocks.
+func (a *AnthropicBot) streamingServerToolUse(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "streaming-server-tool-use")
+	defer span.End()
+
+	fmt.Println("\n=== Example 3c: Streaming with Server-Side Tool Use ===")
+
+	stream := a.client.Messages.NewStreaming(ctx, anthropic.MessageNewParams{
+		Model:     anthropic.ModelClaudeHaiku4_5,
+		MaxTokens: 1024,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("Search the web for the current Braintrust AI homepage title.")),
+		},
+		Tools: []anthropic.ToolUnionParam{
+			{OfWebSearchTool20250305: &anthropic.WebSearchTool20250305Param{MaxUses: anthropic.Int(1)}},
+		},
+	})
+
+	fmt.Print("  ")
+	for stream.Next() {
+		event := stream.Current()
+		switch eventVariant := event.AsAny().(type) {
+		case anthropic.ContentBlockStartEvent:
+			switch eventVariant.ContentBlock.Type {
+			case "server_tool_use":
+				fmt.Printf("\n  [Server tool: %s] ", eventVariant.ContentBlock.Name)
+			case "web_search_tool_result":
+				fmt.Print("\n  [Search results received] ")
+			}
+		case anthropic.ContentBlockDeltaEvent:
+			if delta, ok := eventVariant.Delta.AsAny().(anthropic.TextDelta); ok {
+				fmt.Print(delta.Text)
+			}
+		}
+	}
+	fmt.Println()
+
+	if err := stream.Err(); err != nil {
+		return fmt.Errorf("streaming server tool use error: %v", err)
+	}
+
+	return nil
+}
+
 // streamingCitations demonstrates streaming with document citations enabled.
 func (a *AnthropicBot) streamingCitations(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "streaming-citations")
@@ -459,7 +504,7 @@ func main() {
 	// ======================
 	fmt.Println("\nAnthropic Messages Examples")
 	fmt.Println("===========================")
-	fmt.Println("Demonstrating: messages, tools, streaming, citations, extended thinking, prompt caching, vision, and context management")
+	fmt.Println("Demonstrating: messages, tools, streaming, server-side tool use, citations, extended thinking, prompt caching, vision, and context management")
 
 	bot := newAnthropicBot(client)
 
@@ -476,6 +521,10 @@ func main() {
 	}
 
 	if err := bot.streamingCitations(ctx); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+
+	if err := bot.streamingServerToolUse(ctx); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
