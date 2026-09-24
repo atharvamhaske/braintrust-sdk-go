@@ -71,6 +71,7 @@ func (rt *responsesTracer) StartSpan(ctx context.Context, t time.Time, request i
 		"seed",
 		"reasoning",
 		"text",
+		"context_management",
 	}
 
 	// handle simple fields here.
