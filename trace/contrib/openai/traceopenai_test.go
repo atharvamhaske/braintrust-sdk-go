@@ -315,6 +315,34 @@ func TestOpenAIResponsesConversation(t *testing.T) {
 	assert.Equal(map[string]any{"id": conversation.ID}, metadata["conversation"], "conversation should be captured in metadata")
 }
 
+func TestOpenAIResponsesBackground(t *testing.T) {
+	client, _, exporter := setUpTest(t)
+	assert := assert.New(t)
+	require := require.New(t)
+
+	params := responses.ResponseNewParams{
+		Input:      responses.ResponseNewParamsInputUnion{OfString: openai.String("Say hi in 3 words.")},
+		Model:      testModel,
+		Background: openai.Bool(true),
+	}
+
+	timer := oteltest.NewTimer()
+	resp, err := client.Responses.New(context.Background(), params)
+	timeRange := timer.Tick()
+	require.NoError(err)
+	require.NotNil(resp)
+
+	ts := exporter.FlushOne()
+	assertSpanValid(t, ts, timeRange)
+
+	metadata := ts.Metadata()
+	assert.Equal(true, metadata["background"], "background should be captured in metadata")
+	// A background:true create call returns immediately with status "queued"
+	// and no output yet - this must not be mistaken for a synchronous call
+	// that returned incomplete data.
+	assert.Equal("queued", metadata["status"], "a background create call should report status queued")
+}
+
 func TestOpenAIResponsesStreamingClose(t *testing.T) {
 	client, _, exporter := setUpTest(t)
 	require := require.New(t)
