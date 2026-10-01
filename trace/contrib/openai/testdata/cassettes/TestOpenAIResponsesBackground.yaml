@@ -1,0 +1,148 @@
+---
+version: 2
+interactions:
+    - id: 0
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 70
+        transfer_encoding: []
+        trailer: {}
+        host: ""
+        remote_addr: ""
+        request_uri: ""
+        body: '{"background":true,"input":"Say hi in 3 words.","model":"gpt-4o-mini"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Type:
+                - application/json
+            User-Agent:
+                - OpenAI/Go 1.12.0
+            X-Stainless-Arch:
+                - arm64
+            X-Stainless-Lang:
+                - go
+            X-Stainless-Os:
+                - MacOS
+            X-Stainless-Package-Version:
+                - 1.12.0
+            X-Stainless-Retry-Count:
+                - "0"
+            X-Stainless-Runtime:
+                - go
+            X-Stainless-Runtime-Version:
+                - go1.26.5
+        url: https://api.openai.com/v1/responses
+        method: POST
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: -1
+        uncompressed: true
+        body: |-
+            {
+              "id": "resp_01f8d758e788fc3b006abe695df88087d292e474d67a620328",
+              "object": "response",
+              "created_at": 1790863709,
+              "status": "queued",
+              "access_programs": null,
+              "background": true,
+              "completed_at": null,
+              "error": null,
+              "frequency_penalty": 0.0,
+              "incomplete_details": null,
+              "instructions": null,
+              "max_output_tokens": null,
+              "max_tool_calls": null,
+              "model": "gpt-4o-mini-2024-07-18",
+              "moderation": null,
+              "output": [],
+              "parallel_tool_calls": true,
+              "presence_penalty": 0.0,
+              "previous_response_id": null,
+              "prompt_cache_key": null,
+              "prompt_cache_retention": "in_memory",
+              "reasoning": {
+                "context": null,
+                "effort": null,
+                "summary": null
+              },
+              "safety_identifier": null,
+              "service_tier": "auto",
+              "store": true,
+              "temperature": 1.0,
+              "text": {
+                "format": {
+                  "type": "text"
+                },
+                "verbosity": "medium"
+              },
+              "tool_choice": "auto",
+              "tool_usage": {
+                "image_gen": {
+                  "input_tokens": 0,
+                  "input_tokens_details": {
+                    "image_tokens": 0,
+                    "text_tokens": 0
+                  },
+                  "output_tokens": 0,
+                  "output_tokens_details": {
+                    "image_tokens": 0,
+                    "text_tokens": 0
+                  },
+                  "total_tokens": 0
+                },
+                "web_search": {
+                  "num_requests": 0
+                }
+              },
+              "tools": [],
+              "top_logprobs": 0,
+              "top_p": 1.0,
+              "truncation": "disabled",
+              "usage": null,
+              "user": null,
+              "metadata": {}
+            }
+        headers:
+            Access-Control-Expose-Headers:
+                - X-Request-ID
+                - CF-Ray
+                - CF-Ray
+            Alt-Svc:
+                - h3=":443"; ma=86400
+            Cf-Cache-Status:
+                - DYNAMIC
+            Cf-Ray:
+                - a43c0a271c5f6ee3-BOM
+            Content-Type:
+                - application/json
+            Date:
+                - Thu, 01 Oct 2026 14:08:31 GMT
+            Openai-Organization:
+                - fluxai-ql6txb
+            Openai-Processing-Ms:
+                - "1137"
+            Openai-Project:
+                - proj_TyVyJP3AZBjMBnVymwmezBd2
+            Openai-Version:
+                - "2020-10-01"
+            Server:
+                - cloudflare
+            Set-Cookie:
+                - __cf_bm=F7TqKClBSx9EloBFspo.ESbpRRqpid94UbcvNrT.BXo-1790863709.292205-1.0.1.1-DYL7AoRfmi7e8KzfZ2HRaQmQVuLv7DPuZ1yy2ZYgmV2_7EfV1b1_7bFvypR2WHIe9okz2APY3wzeKEd15.fOaWiWV8q.OMy5.iDpqWIK61Ix5Eh4cfv.fgHH21FOYTxC; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Thu, 01 Oct 2026 14:38:31 GMT
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains; preload
+            X-Content-Type-Options:
+                - nosniff
+            X-Request-Id:
+                - req_793e9766aca84d3980914dcbda07dfa6
+        status: 200 OK
+        code: 200
+        duration: 2.135577083s
