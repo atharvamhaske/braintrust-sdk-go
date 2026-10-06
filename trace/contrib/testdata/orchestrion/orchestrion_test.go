@@ -12,7 +12,7 @@ import (
 	"github.com/a2aproject/a2a-go/a2asrv"
 	"github.com/a2aproject/a2a-go/a2asrv/eventqueue"
 	"github.com/anthropics/anthropic-sdk-go"
-		anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
+	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
 	cf "github.com/cloudflare/cloudflare-go/v7"
 	cfai "github.com/cloudflare/cloudflare-go/v7/ai"
 	cfoption "github.com/cloudflare/cloudflare-go/v7/option"
@@ -348,7 +348,7 @@ func TestCloudflare(t *testing.T) {
 		AccountID: cf.F(cloudflareAccountID()),
 		Body: cfai.AIRunParamsBodyTextGeneration{
 			Messages: cf.F([]cfai.AIRunParamsBodyTextGenerationMessage{{
-				Role: "user",
+				Role:    cf.F("user"),
 				Content: cf.F[cfai.AIRunParamsBodyTextGenerationMessagesContentUnion](cfshared.UnionString("Say hello")),
 			}}),
 		},

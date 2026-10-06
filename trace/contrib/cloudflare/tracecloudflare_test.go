@@ -3,7 +3,6 @@ package cloudflare
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 
 	cf "github.com/cloudflare/cloudflare-go/v7"
@@ -110,6 +109,8 @@ func TestTextGeneration(t *testing.T) {
 
 	metrics := ts.Metrics()
 	assert.Greater(t, metrics["tokens"], float64(0))
+	assert.Equal(t, float64(4), metrics["prompt_tokens"])
+	assert.NotContains(t, metrics, "completion_tokens")
 }
 
 func TestTextGenerationWithTools(t *testing.T) {
@@ -206,13 +207,11 @@ func TestTextEmbeddings(t *testing.T) {
 	assert.Equal(t, "cloudflare", metadata["provider"])
 	assert.Equal(t, testEmbeddingModel, metadata["model"])
 	assert.Equal(t, "embeddings", metadata["task"])
+	assert.Equal(t, map[string]any{"inputs": []any{map[string]any{"content": "hello world"}}}, ts.Input())
 }
 
-// TestTextClassification exercises the fallback "log Cloudflare's own
-// response shape as-is" path, which every task other than text generation
-// and embeddings goes through. The response here is a bare JSON array
-// (Cloudflare's response envelope unwraps to []any, not a map), which is
-// what the fallback path specifically has to handle correctly.
+// TestTextClassification verifies classification uses a canonical media
+// operation payload while preserving Cloudflare's structured annotations.
 func TestTextClassification(t *testing.T) {
 	client, accountID, exporter := setUpTest(t)
 
@@ -226,11 +225,12 @@ func TestTextClassification(t *testing.T) {
 	require.NotNil(t, resp)
 
 	ts := exporter.FlushOne()
-	ts.AssertNameIs("cloudflare.ai.run")
+	ts.AssertNameIs("cloudflare.ai.classify")
 
-	output, ok := ts.Output().([]any)
-	require.True(t, ok, "expected the classification array to be logged as-is")
-	require.NotEmpty(t, output)
+	output, ok := ts.Output().(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "classify", ts.Input().(map[string]any)["operation"])
+	require.NotEmpty(t, output["annotations"])
 
 	metadata := ts.Metadata()
 	assert.Equal(t, "cloudflare", metadata["provider"])
@@ -238,22 +238,15 @@ func TestTextClassification(t *testing.T) {
 	assert.NotContains(t, metadata, "task", "task shouldn't be guessed for the fallback path")
 }
 
-func TestTruncateLargeFields(t *testing.T) {
-	bigArray := make([]any, maxInlineArrayLen+1)
-	for i := range bigArray {
-		bigArray[i] = i
-	}
-	bigString := strings.Repeat("a", maxInlineStringLen+1)
-
-	got := truncateLargeFields(map[string]any{
-		"image":  bigArray,
-		"prompt": bigString,
-		"model":  "@cf/meta/llama-3.1-8b-instruct-fast",
-		"nested": map[string]any{"audio": bigArray},
-	}).(map[string]any)
-
-	assert.Equal(t, map[string]any{"type": "array", "length": maxInlineArrayLen + 1}, got["image"])
-	assert.Equal(t, map[string]any{"type": "string", "length": maxInlineStringLen + 1}, got["prompt"])
-	assert.Equal(t, "@cf/meta/llama-3.1-8b-instruct-fast", got["model"])
-	assert.Equal(t, map[string]any{"type": "array", "length": maxInlineArrayLen + 1}, got["nested"].(map[string]any)["audio"])
+func TestEmbeddingInput(t *testing.T) {
+	assert.Equal(t, map[string]any{
+		"inputs": []any{
+			map[string]any{"content": "first"},
+			map[string]any{"content": "second"},
+		},
+		"output_dimensions": float64(128),
+	}, embeddingInput(map[string]any{
+		"text":              []any{"first", "second"},
+		"output_dimensions": float64(128),
+	}))
 }

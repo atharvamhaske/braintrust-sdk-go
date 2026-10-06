@@ -15,19 +15,30 @@ import (
 // BufferedReader saves data read from the readCloser and triggers an action
 // when fully read or closed.
 type BufferedReader struct {
-	src    io.ReadCloser
-	buf    *bytes.Buffer
-	onDone func(io.Reader) // called once when fully read or closed
-	once   sync.Once
-	closed bool
+	src        io.ReadCloser
+	buf        *bytes.Buffer
+	onResponse func(io.Reader, bool)
+	once       sync.Once
+	closed     bool
 }
 
 // NewBufferedReader creates a new buffered reader that calls onDone when fully read or closed.
 func NewBufferedReader(src io.ReadCloser, onDone func(io.Reader)) *BufferedReader {
+	return NewResponseBufferedReader(src, func(body io.Reader, _ bool) {
+		if onDone != nil {
+			onDone(body)
+		}
+	})
+}
+
+// NewResponseBufferedReader calls onDone once with the bytes read so far and
+// whether the response reached EOF. A false complete value means the caller
+// closed or abandoned the body before consuming it fully.
+func NewResponseBufferedReader(src io.ReadCloser, onDone func(io.Reader, bool)) *BufferedReader {
 	return &BufferedReader{
-		src:    src,
-		buf:    &bytes.Buffer{},
-		onDone: onDone,
+		src:        src,
+		buf:        &bytes.Buffer{},
+		onResponse: onDone,
 	}
 }
 
@@ -37,7 +48,7 @@ func (r *BufferedReader) Read(p []byte) (int, error) {
 		_, _ = r.buf.Write(p[:n])
 	}
 	if err == io.EOF {
-		r.trigger()
+		r.trigger(true)
 	}
 	return n, err
 }
@@ -45,15 +56,15 @@ func (r *BufferedReader) Read(p []byte) (int, error) {
 // Close closes the underlying reader and triggers the onDone callback.
 func (r *BufferedReader) Close() error {
 	r.closed = true
-	r.trigger()
+	r.trigger(false)
 	return r.src.Close()
 }
 
 // trigger ensures onDone is only called once
-func (r *BufferedReader) trigger() {
+func (r *BufferedReader) trigger(complete bool) {
 	r.once.Do(func() {
-		if r.onDone != nil {
-			r.onDone(r.buf)
+		if r.onResponse != nil {
+			r.onResponse(r.buf, complete)
 		}
 	})
 }

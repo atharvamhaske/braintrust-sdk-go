@@ -127,6 +127,7 @@ require (
 )
 
 replace (
+	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/cloudflare => ../trace/contrib/cloudflare
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/adk => ../trace/contrib/adk
 	github.com/braintrustdata/braintrust-sdk-go/trace/contrib/langchaingo => ../trace/contrib/langchaingo
 )

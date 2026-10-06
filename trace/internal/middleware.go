@@ -20,6 +20,13 @@ type MiddlewareTracer interface {
 	TagSpan(span trace.Span, response io.Reader) error
 }
 
+// ResponseMiddlewareTracer optionally receives response headers and whether
+// the application consumed the response body to EOF. Implementations can use
+// this for response formats, such as binary media, that require HTTP metadata.
+type ResponseMiddlewareTracer interface {
+	TagResponse(span trace.Span, response *http.Response, body io.Reader, complete bool) error
+}
+
 // NextMiddleware represents the next middleware to run in the client middleware chain.
 type NextMiddleware = func(req *http.Request) (*http.Response, error)
 
@@ -94,16 +101,22 @@ func Middleware(getMiddlewareTracer TracerRouter, log logger.Logger) func(*http.
 		//
 		// It's critical that we don't try to parse the whole response body here because
 		// we don't want to block clients waiting for streaming responses.
-		onResponseDone := func(r io.Reader) {
+		onResponseDone := func(r io.Reader, complete bool) {
 			// NOTE: this could be done in a goroutine so we don't add any extra
 			// latency to the response.
 			now := time.Now()
-			if err := mt.TagSpan(span, r); err != nil {
+			var err error
+			if responseTracer, ok := mt.(ResponseMiddlewareTracer); ok {
+				err = responseTracer.TagResponse(span, resp, r, complete)
+			} else {
+				err = mt.TagSpan(span, r)
+			}
+			if err != nil {
 				log.Warn("Error tagging span", "error", err)
 			}
 			span.End(trace.WithTimestamp(now))
 		}
-		body := NewBufferedReader(resp.Body, onResponseDone)
+		body := NewResponseBufferedReader(resp.Body, onResponseDone)
 		resp.Body = body
 		return resp, nil
 	}
