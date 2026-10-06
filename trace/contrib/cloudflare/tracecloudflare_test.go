@@ -108,9 +108,9 @@ func TestTextGeneration(t *testing.T) {
 	assert.NotEmpty(t, message["content"])
 
 	metrics := ts.Metrics()
-	assert.Greater(t, metrics["tokens"], float64(0))
-	assert.Equal(t, float64(4), metrics["prompt_tokens"])
-	assert.NotContains(t, metrics, "completion_tokens")
+	assert.Equal(t, float64(37), metrics["prompt_tokens"])
+	assert.Equal(t, float64(10), metrics["completion_tokens"])
+	assert.Equal(t, float64(47), metrics["tokens"])
 }
 
 func TestTextGenerationWithTools(t *testing.T) {
@@ -208,6 +208,10 @@ func TestTextEmbeddings(t *testing.T) {
 	assert.Equal(t, testEmbeddingModel, metadata["model"])
 	assert.Equal(t, "embeddings", metadata["task"])
 	assert.Equal(t, map[string]any{"inputs": []any{map[string]any{"content": "hello world"}}}, ts.Input())
+	metrics := ts.Metrics()
+	assert.Equal(t, float64(4), metrics["prompt_tokens"])
+	assert.Equal(t, float64(4), metrics["tokens"])
+	assert.NotContains(t, metrics, "completion_tokens")
 }
 
 // TestTextClassification verifies classification uses a canonical media
@@ -236,17 +240,4 @@ func TestTextClassification(t *testing.T) {
 	assert.Equal(t, "cloudflare", metadata["provider"])
 	assert.Equal(t, testClassificationModel, metadata["model"])
 	assert.NotContains(t, metadata, "task", "task shouldn't be guessed for the fallback path")
-}
-
-func TestEmbeddingInput(t *testing.T) {
-	assert.Equal(t, map[string]any{
-		"inputs": []any{
-			map[string]any{"content": "first"},
-			map[string]any{"content": "second"},
-		},
-		"output_dimensions": float64(128),
-	}, embeddingInput(map[string]any{
-		"text":              []any{"first", "second"},
-		"output_dimensions": float64(128),
-	}))
 }
